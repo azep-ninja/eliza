@@ -58,17 +58,62 @@ export const continueAction: Action = {
     similes: ["ELABORATE", "KEEP_TALKING"],
     description:
         "ONLY use this action when the message necessitates a follow up. Do not use this action when the conversation is finished or the user does not wish to speak (use IGNORE instead). If the last message action was CONTINUE, and the user has not responded. Use sparingly.",
+    // validate: async (runtime: IAgentRuntime, message: Memory) => {
+    //     const recentMessagesData = await runtime.messageManager.getMemories({
+    //         roomId: message.roomId,
+    //         count: 10,
+    //         unique: false,
+    //     });
+
+
+    //     const agentMessages = recentMessagesData.filter(
+    //         (m: { userId: any }) => m.userId === runtime.agentId
+    //     );
+
+    //     // check if the last messages were all continues=
+    //     if (agentMessages) {
+    //         const lastMessages = agentMessages.slice(0, maxContinuesInARow);
+    //         if (lastMessages.length >= maxContinuesInARow) {
+    //             const allContinues = lastMessages.every(
+    //                 (m: { content: any }) =>
+    //                     (m.content as Content).action === "CONTINUE"
+    //             );
+    //             if (allContinues) {
+    //                 return false;
+    //             }
+    //         }
+    //     }
+
+    //     return true;
+    // },
     validate: async (runtime: IAgentRuntime, message: Memory) => {
         const recentMessagesData = await runtime.messageManager.getMemories({
             roomId: message.roomId,
             count: 10,
             unique: false,
         });
+
+        // First check if we have a user response after our last CONTINUE
+        const sortedMessages = recentMessagesData.sort((a, b) =>
+            (b.createdAt || 0) - (a.createdAt || 0)
+        );
+
+        const lastUserMessage = sortedMessages.find(m => m.userId !== runtime.agentId);
+        const lastAgentMessage = sortedMessages.find(m => m.userId === runtime.agentId);
+
+        // If the most recent message is from a user and came after our last CONTINUE,
+        // we shouldn't continue again
+        if (lastUserMessage && lastAgentMessage &&
+            lastUserMessage.createdAt > lastAgentMessage.createdAt &&
+            (lastAgentMessage.content as Content).action === 'CONTINUE') {
+            return false;
+        }
+
+        // Validation for consecutive CONTINUEs
         const agentMessages = recentMessagesData.filter(
             (m: { userId: any }) => m.userId === runtime.agentId
         );
 
-        // check if the last messages were all continues=
         if (agentMessages) {
             const lastMessages = agentMessages.slice(0, maxContinuesInARow);
             if (lastMessages.length >= maxContinuesInARow) {
@@ -91,6 +136,13 @@ export const continueAction: Action = {
         options: any,
         callback: HandlerCallback
     ) => {
+        // First check if validation passed
+        const isValid = await continueAction.validate(runtime, message);
+        if (!isValid) {
+            elizaLogger.info('[CONTINUE] Handler aborted - Failed validation/Already responded');
+            return;
+        }
+
         if (
             message.content.text.endsWith("?") ||
             message.content.text.endsWith("!")
@@ -155,12 +207,12 @@ export const continueAction: Action = {
             .filter((m: { userId: any }) => m.userId === runtime.agentId)
             .slice(0, maxContinuesInARow + 1)
             .some((m: { content: any }) => m.content === message.content);
-
         if (messageExists) {
             return;
         }
 
         await callback(response);
+
 
         // if the action is CONTINUE, check if we are over maxContinuesInARow
         if (response.action === "CONTINUE") {
