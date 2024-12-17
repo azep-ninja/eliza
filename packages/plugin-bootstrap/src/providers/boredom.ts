@@ -1,4 +1,4 @@
-import { IAgentRuntime, Memory, Provider, State } from "@ai16z/eliza";
+import { elizaLogger, IAgentRuntime, Memory, Provider, State } from "@ai16z/eliza";
 
 const boredomLevels = [
     {
@@ -334,6 +334,7 @@ const boredomProvider: Provider = {
             Math.random() * boredomLevel.statusMessages.length
         );
         const selectedMessage = boredomLevel.statusMessages[randomIndex];
+        elizaLogger.info(`Boredom Triggered: ${selectedMessage}`)
         return selectedMessage.replace("{{agentName}}", agentName);
     },
 };

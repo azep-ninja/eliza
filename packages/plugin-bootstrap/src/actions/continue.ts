@@ -93,23 +93,38 @@ export const continueAction: Action = {
             unique: false,
         });
 
-        // First check if we have a user response after our last CONTINUE
         const sortedMessages = recentMessagesData.sort((a, b) =>
             (b.createdAt || 0) - (a.createdAt || 0)
         );
 
         const lastUserMessage = sortedMessages.find(m => m.userId !== runtime.agentId);
         const lastAgentMessage = sortedMessages.find(m => m.userId === runtime.agentId);
+        const currentTime = Date.now();
 
-        // If the most recent message is from a user and came after our last CONTINUE,
-        // we shouldn't continue again
-        if (lastUserMessage && lastAgentMessage &&
-            lastUserMessage.createdAt > lastAgentMessage.createdAt &&
-            (lastAgentMessage.content as Content).action === 'CONTINUE') {
+        // NEW: Timing check to prevent rapid responses
+        if (lastAgentMessage &&
+            (currentTime - lastAgentMessage.createdAt) < 500) {
+            elizaLogger.info(`[CONTINUE] Blocking - Too soon after last message`, {
+                timeSinceLastMessage: currentTime - lastAgentMessage.createdAt
+            });
             return false;
         }
 
-        // Validation for consecutive CONTINUEs
+        // NEW: Check for duplicate responses to same message
+        if (lastAgentMessage?.content?.inReplyTo === message.id) {
+            elizaLogger.info(`[CONTINUE] Blocking - Already responded to this message`);
+            return false;
+        }
+
+        // EXISTING: Check for user response after CONTINUE
+        if (lastUserMessage && lastAgentMessage &&
+            lastUserMessage.createdAt > lastAgentMessage.createdAt &&
+            (lastAgentMessage.content as Content).action === 'CONTINUE') {
+            elizaLogger.info(`[CONTINUE] Blocking - User has already responded to previous CONTINUE`);
+            return false;
+        }
+
+        // EXISTING: Validation for consecutive CONTINUEs
         const agentMessages = recentMessagesData.filter(
             (m: { userId: any }) => m.userId === runtime.agentId
         );
@@ -122,6 +137,7 @@ export const continueAction: Action = {
                         (m.content as Content).action === "CONTINUE"
                 );
                 if (allContinues) {
+                    elizaLogger.info(`[CONTINUE] Blocking - Too many consecutive continues`);
                     return false;
                 }
             }
