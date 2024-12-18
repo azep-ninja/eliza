@@ -78,6 +78,7 @@ steps:
         --zone $_ZONE \
         --network $_NETWORK \
         --subnet $_SUBNET \
+        --no-address \
         --boot-disk-size $_DISK_SIZE \
         --metadata-from-file startup-script=startup.sh || { echo "Instance creation failed"; exit 1; }
       echo "Instance creation completed"
@@ -85,7 +86,7 @@ steps:
 
 substitutions:
   _ZONE: us-central1-a
-  _MACHINE_TYPE: e2-medium
+  _MACHINE_TYPE: e2-small
   _DISK_SIZE: 30GB
   _NETWORK: agents-vpc
   _SUBNET: agents-subnet
@@ -94,3 +95,4 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
