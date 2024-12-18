@@ -21,7 +21,7 @@
 -   👥 Multi-agent and room support
 -   📚 Easily ingest and interact with your documents
 -   💾 Retrievable memory and document store
--   🚀 Highly extensible - create your own actions and clients
+-   🚀 Highly extensible - create your own actions and clients.
 -   ☁️ Supports many models (local Llama, OpenAI, Anthropic, Groq, etc.)
 -   📦 Just works!
 
