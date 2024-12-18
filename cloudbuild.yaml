@@ -8,7 +8,7 @@ steps:
     echo "Starting build process..."
     echo "CHARACTER_FILE is: $_CHARACTER_FILE"
     echo "SUFFIX is: $_SUFFIX"
-    # Extract base name from CHARACTER_FILE without $ for regular bash variables
+    # Extract base name from CHARACTER_FILE
     agent_name=$(echo $_CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
     # Add suffix if provided
     if [ ! -z "$_SUFFIX" ]; then
@@ -22,7 +22,21 @@ steps:
     ls -la
     pwd
 
-# Build the container image
+# Create Artifact Registry repository if it doesn't exist
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    echo "Setting up Artifact Registry repository..."
+    if ! gcloud artifacts repositories list --location=us-central1 | grep -q "qi-agents"; then
+      gcloud artifacts repositories create qi-agents \
+        --repository-format=docker \
+        --location=us-central1 \
+        --description="QI Agents container repository"
+    fi
+
+# Build the container image for Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'bash'
   args:
@@ -32,10 +46,10 @@ steps:
     full_name=$(cat /workspace/full_name)
     echo "Building for: ${full_name}"
     ls -la
-    docker build -t gcr.io/$PROJECT_ID/${full_name} . || { echo "Docker build failed"; exit 1; }
+    docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name} . || { echo "Docker build failed"; exit 1; }
     echo "Docker build completed"
 
-# Push the container image
+# Push the container image to Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'bash'
   args:
@@ -43,8 +57,8 @@ steps:
   - |
     echo "Starting Docker push..."
     full_name=$(cat /workspace/full_name)
-    echo "Pushing image: gcr.io/$PROJECT_ID/${full_name}"
-    docker push gcr.io/$PROJECT_ID/${full_name} || { echo "Docker push failed"; exit 1; }
+    echo "Pushing image: us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name}"
+    docker push us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name} || { echo "Docker push failed"; exit 1; }
     echo "Docker push completed"
 
 # Create or update instance
@@ -60,13 +74,13 @@ steps:
     if [[ $(gcloud compute instances list --filter="name=${full_name}" --format="get(name)") ]]; then
       echo "Updating existing instance ${full_name}"
       gcloud compute instances update-container ${full_name} \
-        --container-image gcr.io/$PROJECT_ID/${full_name} \
+        --container-image us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name} \
         --zone $_ZONE || { echo "Instance update failed"; exit 1; }
       echo "Instance update completed"
     else
       echo "Creating new instance ${full_name}"
       gcloud compute instances create-with-container ${full_name} \
-        --container-image gcr.io/$PROJECT_ID/${full_name} \
+        --container-image us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name} \
         --machine-type $_MACHINE_TYPE \
         --zone $_ZONE \
         --boot-disk-size $_DISK_SIZE \
@@ -78,9 +92,8 @@ substitutions:
   _ZONE: us-central1-a
   _MACHINE_TYPE: e2-small
   _DISK_SIZE: 40GB
-  # These are defaults, will be overridden by trigger settings
-  _CHARACTER_FILE: default.character.json
-  _SUFFIX: agent
+  _CHARACTER_FILE: default.character.json  # Default value
+  _SUFFIX: agent  # Default value
 
 options:
   logging: CLOUD_LOGGING_ONLY
