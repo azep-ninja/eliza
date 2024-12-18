@@ -1,0 +1,71 @@
+steps:
+# Set agent name based on character file
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    # Extract base name from CHARACTER_FILE
+    AGENT_NAME=$$(echo $$CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
+    # Add suffix if provided
+    if [ ! -z "$$SUFFIX" ]; then
+      FULL_NAME="$$AGENT_NAME-$$SUFFIX"
+    else
+      FULL_NAME="$$AGENT_NAME"
+    fi
+    echo "$$AGENT_NAME" > /workspace/agent_name
+    echo "$$FULL_NAME" > /workspace/full_name
+    echo "Agent name will be: $$FULL_NAME"
+
+# Build the container image
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    FULL_NAME=$$(cat /workspace/full_name)
+    docker build -t gcr.io/$PROJECT_ID/$$FULL_NAME .
+
+# Push the container image
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    FULL_NAME=$$(cat /workspace/full_name)
+    docker push gcr.io/$PROJECT_ID/$$FULL_NAME
+
+# Create or update instance
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    FULL_NAME=$$(cat /workspace/full_name)
+    if [[ $(gcloud compute instances list --filter="name=$$FULL_NAME" --format="get(name)") ]]; then
+      echo "Updating existing instance $$FULL_NAME"
+      gcloud compute instances update-container $$FULL_NAME \
+        --container-image gcr.io/$PROJECT_ID/$$FULL_NAME \
+        --zone $$ZONE
+    else
+      echo "Creating new instance $$FULL_NAME"
+      gcloud compute instances create-with-container $$FULL_NAME \
+        --container-image gcr.io/$PROJECT_ID/$$FULL_NAME \
+        --machine-type $$MACHINE_TYPE \
+        --zone $$ZONE \
+        --boot-disk-size $$DISK_SIZE \
+        --metadata-from-file startup-script=startup.sh
+    fi
+
+substitutions:
+  _ZONE: us-central1-a
+  _MACHINE_TYPE: e2-small
+  _DISK_SIZE: 40GB
+
+options:
+  env:
+    - 'CHARACTER_FILE=${_CHARACTER_FILE}'
+    - 'SUFFIX=${_SUFFIX}'
+    - 'ZONE=${_ZONE}'
+    - 'MACHINE_TYPE=${_MACHINE_TYPE}'
+    - 'DISK_SIZE=${_DISK_SIZE}'
