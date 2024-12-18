@@ -1,4 +1,57 @@
-# ... (previous steps remain the same) ...
+steps:
+# Set agent name based on character file
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    echo "Starting build process..."
+    echo "CHARACTER_FILE is: $_CHARACTER_FILE"
+    echo "SUFFIX is: $_SUFFIX"
+    # Extract base name from CHARACTER_FILE
+    agent_name=$(echo $_CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
+    # Add suffix if provided
+    if [ ! -z "$_SUFFIX" ]; then
+      full_name="${agent_name}-${_SUFFIX}"
+    else
+      full_name="${agent_name}"
+    fi
+    # Add timestamp for versioning
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    echo "${agent_name}" > /workspace/agent_name
+    echo "${full_name}" > /workspace/full_name
+    echo "${timestamp}" > /workspace/version
+    echo "Agent name will be: ${full_name}"
+    echo "Version will be: ${timestamp}"
+    ls -la
+    pwd
+
+# Build the container image for Artifact Registry
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    echo "Starting Docker build..."
+    full_name=$(cat /workspace/full_name)
+    version=$(cat /workspace/version)
+    echo "Building for: ${full_name}"
+    ls -la
+    docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name}:${version} . || { echo "Docker build failed"; exit 1; }
+    echo "Docker build completed"
+
+# Push the container image to Artifact Registry
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    echo "Starting Docker push..."
+    full_name=$(cat /workspace/full_name)
+    version=$(cat /workspace/version)
+    echo "Pushing image: us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name}:${version}"
+    docker push us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name}:${version} || { echo "Docker push failed"; exit 1; }
+    echo "Docker push completed"
 
 # Create or update instance
 - name: 'gcr.io/cloud-builders/gcloud'
@@ -33,9 +86,9 @@
 substitutions:
   _ZONE: us-central1-a
   _MACHINE_TYPE: e2-medium
-  _DISK_SIZE: 40GB
-  _NETWORK: qi-agents-vpc
-  _SUBNET: qi-agents-subnet
+  _DISK_SIZE: 30GB
+  _NETWORK: agents-vpc
+  _SUBNET: agents-subnet
   _CHARACTER_FILE: default.character.json  # Default value
   _SUFFIX: agent  # Default value
 
