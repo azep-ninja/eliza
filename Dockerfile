@@ -1,4 +1,4 @@
-# Use a specific Node.js version for better reproducibility
+# Use Node.js 23.3.0 as specified in package.json
 FROM node:23.3.0-slim AS builder
 
 # Install pnpm globally and install necessary build tools
@@ -14,19 +14,19 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 # Set the working directory
 WORKDIR /app
 
-# Copy package.json and other configuration files
+# Copy package files first for better caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
+
+# Install dependencies and build the project
+RUN pnpm install
 
 # Copy the rest of the application code
 COPY agent ./agent
 COPY packages ./packages
 COPY scripts ./scripts
-# Don't copy characters folder as we'll get it from GCS
 
-# Install dependencies and build the project
-RUN pnpm install --frozen-lockfile \
-    && pnpm build-docker \
-    && pnpm prune --prod
+# Build the project
+RUN pnpm build-docker && pnpm prune --prod
 
 # Create a new stage for the final image
 FROM node:23.3.0-slim
@@ -57,12 +57,19 @@ COPY --from=builder /app/scripts ./scripts
 # Create characters directory
 RUN mkdir -p characters
 
-# Set default environment variables
-ENV PORT=8080
-ENV SERVER_PORT=8080
-
-# Expose the port
-EXPOSE 8080
-
-# Modified command to fetch character file from GCS before starting
-CMD sh -c "gsutil cp gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE} characters/${CHARACTER_FILE} && pnpm start --non-interactive --characters=characters/$CHARACTER_FI${CHARACTER_FILE}"
+# Add debugging and error handling to startup command
+CMD sh -c '\
+    echo "Debug: Starting container" && \
+    echo "Debug: AGENTS_BUCKET_NAME=${AGENTS_BUCKET_NAME}" && \
+    echo "Debug: CHARACTER_FILE=${CHARACTER_FILE}" && \
+    echo "Debug: Full GCS path=gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE}" && \
+    if [ -z "${AGENTS_BUCKET_NAME}" ]; then \
+        echo "Error: AGENTS_BUCKET_NAME is empty" && exit 1; \
+    fi && \
+    if [ -z "${CHARACTER_FILE}" ]; then \
+        echo "Error: CHARACTER_FILE is empty" && exit 1; \
+    fi && \
+    echo "Debug: Attempting to copy character file..." && \
+    gsutil cp gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE} characters/${CHARACTER_FILE} && \
+    echo "Debug: Starting application..." && \
+    pnpm start --non-interactive --characters=characters/${CHARACTER_FILE}'

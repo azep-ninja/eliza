@@ -26,19 +26,29 @@ steps:
     ls -la
     pwd
 
-# Verify secrets access
+# Verify secrets and bucket access
 - name: 'gcr.io/cloud-builders/gcloud'
   entrypoint: 'bash'
   args:
   - '-c'
   - |
     echo "Verifying secrets access..."
-    echo "Testing secret access..."
-    if ! gcloud secrets versions access latest --secret="small-google-model"; then
-      echo "Failed to access secrets"
+    echo "Testing secrets..."
+    if ! gcloud secrets versions access latest --secret="small-google-model" > /dev/null; then
+      echo "Failed to access small-google-model secret"
       exit 1
     fi
-    echo "Secret access verified"
+    if ! gcloud secrets versions access latest --secret="agents-bucket-name" > /dev/null; then
+      echo "Failed to access agents-bucket-name secret"
+      exit 1
+    fi
+    echo "Verifying bucket access..."
+    bucket_name=$(gcloud secrets versions access latest --secret="agents-bucket-name")
+    if ! gsutil ls gs://${bucket_name} > /dev/null; then
+      echo "Failed to access bucket"
+      exit 1
+    fi
+    echo "Secret and bucket access verified"
 
 # Build the container image
 - name: 'gcr.io/cloud-builders/docker'
@@ -104,7 +114,7 @@ substitutions:
   _DISK_SIZE: 30GB
   _NETWORK: agents-vpc
   _SUBNET: agents-subnet
-  _CHARACTER_FILE: defalt.character.json
+  _CHARACTER_FILE: default.character.json
   _SUFFIX: agent
 
 options:
