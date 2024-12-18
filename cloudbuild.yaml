@@ -69,3 +69,4 @@ options:
     - 'ZONE=${_ZONE}'
     - 'MACHINE_TYPE=${_MACHINE_TYPE}'
     - 'DISK_SIZE=${_DISK_SIZE}'
+  logging: CLOUD_LOGGING_ONLY
