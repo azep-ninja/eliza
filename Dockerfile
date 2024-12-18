@@ -14,19 +14,16 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 # Set the working directory
 WORKDIR /app
 
-# Copy package files first for better caching
+# Copy all workspace files first
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
-
-# Install dependencies and build the project
-RUN pnpm install
-
-# Copy the rest of the application code
-COPY agent ./agent
 COPY packages ./packages
+COPY agent ./agent
 COPY scripts ./scripts
 
-# Build the project
-RUN pnpm build-docker && pnpm prune --prod
+# Install dependencies and build the project
+RUN pnpm install && \
+    pnpm build-docker && \
+    pnpm prune --prod
 
 # Create a new stage for the final image
 FROM node:23.3.0-slim
