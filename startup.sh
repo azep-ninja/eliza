@@ -61,10 +61,11 @@ ls -la "$AGENT_DATA_DIR/data"
 
 # Pull latest image with verification
 echo "Pulling latest image..."
-if ! docker pull us-central1-docker.pkg.dev/${PROJECT_ID}/${FULL_NAME}:${version}; then
-    echo "Failed to pull image"
+docker pull us-central1-docker.pkg.dev/${PROJECT_ID}/${FULL_NAME}:${version} 2>&1 | tee /tmp/docker-pull.log || {
+    echo "Failed to pull image, logs:"
+    cat /tmp/docker-pull.log
     exit 1
-fi
+}
 
 # Get secrets from Secret Manager
 echo "Fetching secrets..."
