@@ -1,37 +1,63 @@
 #!/bin/bash
 
+# Enable error checking and debugging
+set -e  # Exit on any error
+set -x  # Print each command before executing
+
 # Log startup for debugging
 echo "Starting initialization script..."
 
-# Create parent directories first with error checking
-echo "Creating directory structure..."
-sudo mkdir -p /mnt/stateful_partition || {
-    echo "Failed to create stateful_partition directory"
-    exit 1
-}
+# Check if directory exists first and show current permissions
+echo "Checking current state..."
+ls -la /mnt || true
+ls -la /mnt/stateful_partition || true
 
-# Create qi-agents directory
-sudo mkdir -p /mnt/stateful_partition/qi-agents || {
-    echo "Failed to create qi-agents directory"
+# Try creating base directory first
+echo "Creating base directory..."
+if ! sudo mkdir -p /mnt/stateful_partition; then
+    echo "Failed to create /mnt/stateful_partition"
+    # Try to identify the issue
+    df -h
+    mount | grep /mnt
+    ls -la /mnt
     exit 1
-}
+fi
+
+# Try alternative locations if stateful_partition isn't working
+if [ ! -d "/mnt/stateful_partition" ]; then
+    echo "Using alternative directory /var/lib/qi-agents"
+    sudo mkdir -p /var/lib/qi-agents || {
+        echo "Failed to create alternative directory"
+        exit 1
+    }
+    AGENT_DATA_DIR="/var/lib/qi-agents"
+else
+    AGENT_DATA_DIR="/mnt/stateful_partition/qi-agents"
+    # Create qi-agents directory
+    sudo mkdir -p "$AGENT_DATA_DIR" || {
+        echo "Failed to create qi-agents directory"
+        exit 1
+    }
+fi
 
 # Create data directory
-sudo mkdir -p /mnt/stateful_partition/qi-agents/data || {
+echo "Creating data directory in $AGENT_DATA_DIR..."
+sudo mkdir -p "$AGENT_DATA_DIR/data" || {
     echo "Failed to create data directory"
     exit 1
 }
 
-# Set permissions
+# Set permissions with verbose output
 echo "Setting directory permissions..."
-sudo chmod -R 777 /mnt/stateful_partition/qi-agents || {
+sudo chmod -Rv 777 "$AGENT_DATA_DIR" || {
     echo "Failed to set permissions"
     exit 1
 }
 
-# Verify directory structure
+# Verify directory structure and permissions
 echo "Verifying directory structure..."
-ls -la /mnt/stateful_partition/qi-agents/
+ls -la "$AGENT_DATA_DIR"
+ls -la "$AGENT_DATA_DIR/data"
 
 # Pull latest image with verification
 echo "Pulling latest image..."
@@ -52,7 +78,7 @@ echo "Starting container..."
 docker run -d \
     --name ${FULL_NAME} \
     --restart=always \
-    -v /mnt/stateful_partition/qi-agents/data:/app/agent/data \
+    -v "$AGENT_DATA_DIR/data":/app/agent/data \
     -e AGENTS_BUCKET_NAME="${AGENTS_BUCKET_NAME}" \
     -e CHARACTER_FILE="${CHARACTER_FILE}" \
     -e SMALL_GOOGLE_MODEL="${SMALL_GOOGLE_MODEL}" \
@@ -70,5 +96,11 @@ if ! docker ps | grep ${FULL_NAME}; then
     exit 1
 fi
 
-# Log success
+# Final verification
+echo "Verifying final state..."
+df -h
+mount
+docker ps
+ls -la "$AGENT_DATA_DIR"
+
 echo "Startup script completed successfully"
