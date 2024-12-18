@@ -7,6 +7,9 @@ echo "Starting initialization script..."
 mkdir -p /mnt/stateful_partition/agent/data
 chmod 777 /mnt/stateful_partition/agent/data
 
+# Verify directory creation
+ls -la /mnt/stateful_partition/qi-agents/
+
 # Pull latest image
 echo "Pulling latest image..."
 docker pull us-central1-docker.pkg.dev/${PROJECT_ID}/${FULL_NAME}:${version}
