@@ -8,17 +8,17 @@ steps:
     echo "Starting build process..."
     echo "CHARACTER_FILE is: $_CHARACTER_FILE"
     echo "SUFFIX is: $_SUFFIX"
-    # Extract base name from CHARACTER_FILE
-    AGENT_NAME=$(echo $_CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
+    # Extract base name from CHARACTER_FILE without $ for regular bash variables
+    agent_name=$(echo $_CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
     # Add suffix if provided
     if [ ! -z "$_SUFFIX" ]; then
-      FULL_NAME="$AGENT_NAME-$_SUFFIX"
+      full_name="${agent_name}-${_SUFFIX}"
     else
-      FULL_NAME="$AGENT_NAME"
+      full_name="${agent_name}"
     fi
-    echo "$AGENT_NAME" > /workspace/agent_name
-    echo "$FULL_NAME" > /workspace/full_name
-    echo "Agent name will be: $FULL_NAME"
+    echo "${agent_name}" > /workspace/agent_name
+    echo "${full_name}" > /workspace/full_name
+    echo "Agent name will be: ${full_name}"
     ls -la
     pwd
 
@@ -29,10 +29,10 @@ steps:
   - '-c'
   - |
     echo "Starting Docker build..."
-    FULL_NAME=$(cat /workspace/full_name)
-    echo "Building for: $FULL_NAME"
+    full_name=$(cat /workspace/full_name)
+    echo "Building for: ${full_name}"
     ls -la
-    docker build -t gcr.io/$PROJECT_ID/$FULL_NAME . || { echo "Docker build failed"; exit 1; }
+    docker build -t gcr.io/$PROJECT_ID/${full_name} . || { echo "Docker build failed"; exit 1; }
     echo "Docker build completed"
 
 # Push the container image
@@ -42,9 +42,9 @@ steps:
   - '-c'
   - |
     echo "Starting Docker push..."
-    FULL_NAME=$(cat /workspace/full_name)
-    echo "Pushing image: gcr.io/$PROJECT_ID/$FULL_NAME"
-    docker push gcr.io/$PROJECT_ID/$FULL_NAME || { echo "Docker push failed"; exit 1; }
+    full_name=$(cat /workspace/full_name)
+    echo "Pushing image: gcr.io/$PROJECT_ID/${full_name}"
+    docker push gcr.io/$PROJECT_ID/${full_name} || { echo "Docker push failed"; exit 1; }
     echo "Docker push completed"
 
 # Create or update instance
@@ -54,19 +54,19 @@ steps:
   - '-c'
   - |
     echo "Starting instance creation/update..."
-    FULL_NAME=$(cat /workspace/full_name)
-    echo "Working with instance: $FULL_NAME"
+    full_name=$(cat /workspace/full_name)
+    echo "Working with instance: ${full_name}"
     echo "Checking for existing instance..."
-    if [[ $(gcloud compute instances list --filter="name=$FULL_NAME" --format="get(name)") ]]; then
-      echo "Updating existing instance $FULL_NAME"
-      gcloud compute instances update-container $FULL_NAME \
-        --container-image gcr.io/$PROJECT_ID/$FULL_NAME \
+    if [[ $(gcloud compute instances list --filter="name=${full_name}" --format="get(name)") ]]; then
+      echo "Updating existing instance ${full_name}"
+      gcloud compute instances update-container ${full_name} \
+        --container-image gcr.io/$PROJECT_ID/${full_name} \
         --zone $_ZONE || { echo "Instance update failed"; exit 1; }
       echo "Instance update completed"
     else
-      echo "Creating new instance $FULL_NAME"
-      gcloud compute instances create-with-container $FULL_NAME \
-        --container-image gcr.io/$PROJECT_ID/$FULL_NAME \
+      echo "Creating new instance ${full_name}"
+      gcloud compute instances create-with-container ${full_name} \
+        --container-image gcr.io/$PROJECT_ID/${full_name} \
         --machine-type $_MACHINE_TYPE \
         --zone $_ZONE \
         --boot-disk-size $_DISK_SIZE \
