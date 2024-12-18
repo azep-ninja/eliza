@@ -70,4 +70,4 @@ options:
     - 'MACHINE_TYPE=${_MACHINE_TYPE}'
     - 'DISK_SIZE=${_DISK_SIZE}'
   logging: GCS_ONLY
-  logsBucket: gs://${PROJECT_ID}-build-logs
+  logs_bucket: gs://${PROJECT_ID}-build-logs
