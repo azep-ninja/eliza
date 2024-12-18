@@ -16,17 +16,31 @@ steps:
     else
       full_name="${agent_name}"
     fi
-    # Add timestamp for versioning
-    timestamp=$(date +%Y%m%d-%H%M%S)
     echo "${agent_name}" > /workspace/agent_name
     echo "${full_name}" > /workspace/full_name
+    # Add timestamp for versioning
+    timestamp=$(date +%Y%m%d-%H%M%S)
     echo "${timestamp}" > /workspace/version
     echo "Agent name will be: ${full_name}"
     echo "Version will be: ${timestamp}"
     ls -la
     pwd
 
-# Build the container image for Artifact Registry
+# Verify secrets access
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    echo "Verifying secrets access..."
+    echo "Testing secret access..."
+    if ! gcloud secrets versions access latest --secret="small-google-model"; then
+      echo "Failed to access secrets"
+      exit 1
+    fi
+    echo "Secret access verified"
+
+# Build the container image
 - name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'bash'
   args:
@@ -40,7 +54,7 @@ steps:
     docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name}:${version} . || { echo "Docker build failed"; exit 1; }
     echo "Docker build completed"
 
-# Push the container image to Artifact Registry
+# Push the container image
 - name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'bash'
   args:
@@ -90,8 +104,8 @@ substitutions:
   _DISK_SIZE: 30GB
   _NETWORK: agents-vpc
   _SUBNET: agents-subnet
-  _CHARACTER_FILE: default.character.json  # Default value
-  _SUFFIX: agent  # Default value
+  _CHARACTER_FILE: defalt.character.json
+  _SUFFIX: agent
 
 options:
   logging: CLOUD_LOGGING_ONLY

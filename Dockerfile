@@ -65,4 +65,4 @@ ENV SERVER_PORT=8080
 EXPOSE 8080
 
 # Modified command to fetch character file from GCS before starting
-CMD sh -c "gsutil cp gs://$BUCKET_NAME/$CHARACTER_FILE characters/character.json && pnpm start --non-interactive --characters=characters/character.json"
+CMD sh -c "gsutil cp gs://$AGENTS_BUCKET_NAME/$CHARACTER_FILE characters/$CHARACTER_FILE && pnpm start --non-interactive --characters=characters/$CHARACTER_FILE"
