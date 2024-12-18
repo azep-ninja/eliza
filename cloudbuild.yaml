@@ -6,15 +6,13 @@ steps:
   - '-c'
   - |
     echo "Starting build process..."
-    CHARACTER_FILE="$_CHARACTER_FILE"
-    SUFFIX="$_SUFFIX"
-    echo "CHARACTER_FILE is: $CHARACTER_FILE"
-    echo "SUFFIX is: $SUFFIX"
+    echo "CHARACTER_FILE is: $_CHARACTER_FILE"
+    echo "SUFFIX is: $_SUFFIX"
     # Extract base name from CHARACTER_FILE
-    AGENT_NAME=$(echo $CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
+    AGENT_NAME=$(echo $_CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
     # Add suffix if provided
-    if [ ! -z "$SUFFIX" ]; then
-      FULL_NAME="$AGENT_NAME-$SUFFIX"
+    if [ ! -z "$_SUFFIX" ]; then
+      FULL_NAME="$AGENT_NAME-$_SUFFIX"
     else
       FULL_NAME="$AGENT_NAME"
     fi
@@ -80,8 +78,9 @@ substitutions:
   _ZONE: us-central1-a
   _MACHINE_TYPE: e2-small
   _DISK_SIZE: 40GB
-  _CHARACTER_FILE: default.character.json  # Default value
-  _SUFFIX: agent  # Default value
+  # These are defaults, will be overridden by trigger settings
+  _CHARACTER_FILE: default.character.json
+  _SUFFIX: agent
 
 options:
   logging: CLOUD_LOGGING_ONLY
