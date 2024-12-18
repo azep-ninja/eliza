@@ -17,7 +17,7 @@ docker run -d \
     --name ${FULL_NAME} \
     --restart=always \
     -v /mnt/stateful_partition/agent/data:/app/agent/data \
-    -e AGENTS_BUCKET_NAME="$AGENTS_BUCKET_NAME" \
+    -e AGENTS_BUCKET_NAME="gs://$AGENTS_BUCKET_NAME" \
     -e CHARACTER_FILE="$CHARACTER_FILE" \
     -e SMALL_GOOGLE_MODEL="$SMALL_GOOGLE_MODEL" \
     -e MEDIUM_GOOGLE_MODEL="$MEDIUM_GOOGLE_MODEL" \
