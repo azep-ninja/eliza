@@ -6,19 +6,21 @@ steps:
   - '-c'
   - |
     echo "Starting build process..."
+    CHARACTER_FILE="$_CHARACTER_FILE"
+    SUFFIX="$_SUFFIX"
     echo "CHARACTER_FILE is: $CHARACTER_FILE"
     echo "SUFFIX is: $SUFFIX"
     # Extract base name from CHARACTER_FILE
-    AGENT_NAME=$$(echo $$CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
+    AGENT_NAME=$(echo $CHARACTER_FILE | sed 's/\.character\.json//' | sed 's/_/-/g')
     # Add suffix if provided
-    if [ ! -z "$$SUFFIX" ]; then
-      FULL_NAME="$$AGENT_NAME-$$SUFFIX"
+    if [ ! -z "$SUFFIX" ]; then
+      FULL_NAME="$AGENT_NAME-$SUFFIX"
     else
-      FULL_NAME="$$AGENT_NAME"
+      FULL_NAME="$AGENT_NAME"
     fi
-    echo "$$AGENT_NAME" > /workspace/agent_name
-    echo "$$FULL_NAME" > /workspace/full_name
-    echo "Agent name will be: $$FULL_NAME"
+    echo "$AGENT_NAME" > /workspace/agent_name
+    echo "$FULL_NAME" > /workspace/full_name
+    echo "Agent name will be: $FULL_NAME"
     ls -la
     pwd
 
@@ -29,10 +31,10 @@ steps:
   - '-c'
   - |
     echo "Starting Docker build..."
-    FULL_NAME=$$(cat /workspace/full_name)
-    echo "Building for: $$FULL_NAME"
+    FULL_NAME=$(cat /workspace/full_name)
+    echo "Building for: $FULL_NAME"
     ls -la
-    docker build -t gcr.io/$PROJECT_ID/$$FULL_NAME . || { echo "Docker build failed"; exit 1; }
+    docker build -t gcr.io/$PROJECT_ID/$FULL_NAME . || { echo "Docker build failed"; exit 1; }
     echo "Docker build completed"
 
 # Push the container image
@@ -42,9 +44,9 @@ steps:
   - '-c'
   - |
     echo "Starting Docker push..."
-    FULL_NAME=$$(cat /workspace/full_name)
-    echo "Pushing image: gcr.io/$PROJECT_ID/$$FULL_NAME"
-    docker push gcr.io/$PROJECT_ID/$$FULL_NAME || { echo "Docker push failed"; exit 1; }
+    FULL_NAME=$(cat /workspace/full_name)
+    echo "Pushing image: gcr.io/$PROJECT_ID/$FULL_NAME"
+    docker push gcr.io/$PROJECT_ID/$FULL_NAME || { echo "Docker push failed"; exit 1; }
     echo "Docker push completed"
 
 # Create or update instance
@@ -54,22 +56,22 @@ steps:
   - '-c'
   - |
     echo "Starting instance creation/update..."
-    FULL_NAME=$$(cat /workspace/full_name)
-    echo "Working with instance: $$FULL_NAME"
+    FULL_NAME=$(cat /workspace/full_name)
+    echo "Working with instance: $FULL_NAME"
     echo "Checking for existing instance..."
-    if [[ $(gcloud compute instances list --filter="name=$$FULL_NAME" --format="get(name)") ]]; then
-      echo "Updating existing instance $$FULL_NAME"
-      gcloud compute instances update-container $$FULL_NAME \
-        --container-image gcr.io/$PROJECT_ID/$$FULL_NAME \
-        --zone $$ZONE || { echo "Instance update failed"; exit 1; }
+    if [[ $(gcloud compute instances list --filter="name=$FULL_NAME" --format="get(name)") ]]; then
+      echo "Updating existing instance $FULL_NAME"
+      gcloud compute instances update-container $FULL_NAME \
+        --container-image gcr.io/$PROJECT_ID/$FULL_NAME \
+        --zone $_ZONE || { echo "Instance update failed"; exit 1; }
       echo "Instance update completed"
     else
-      echo "Creating new instance $$FULL_NAME"
-      gcloud compute instances create-with-container $$FULL_NAME \
-        --container-image gcr.io/$PROJECT_ID/$$FULL_NAME \
-        --machine-type $$MACHINE_TYPE \
-        --zone $$ZONE \
-        --boot-disk-size $$DISK_SIZE \
+      echo "Creating new instance $FULL_NAME"
+      gcloud compute instances create-with-container $FULL_NAME \
+        --container-image gcr.io/$PROJECT_ID/$FULL_NAME \
+        --machine-type $_MACHINE_TYPE \
+        --zone $_ZONE \
+        --boot-disk-size $_DISK_SIZE \
         --metadata-from-file startup-script=startup.sh || { echo "Instance creation failed"; exit 1; }
       echo "Instance creation completed"
     fi
@@ -78,12 +80,8 @@ substitutions:
   _ZONE: us-central1-a
   _MACHINE_TYPE: e2-small
   _DISK_SIZE: 40GB
+  _CHARACTER_FILE: default.character.json  # Default value
+  _SUFFIX: agent  # Default value
 
 options:
-  env:
-    - 'CHARACTER_FILE=${_CHARACTER_FILE}'
-    - 'SUFFIX=${_SUFFIX}'
-    - 'ZONE=${_ZONE}'
-    - 'MACHINE_TYPE=${_MACHINE_TYPE}'
-    - 'DISK_SIZE=${_DISK_SIZE}'
   logging: CLOUD_LOGGING_ONLY
