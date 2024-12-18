@@ -24,7 +24,7 @@ COPY scripts ./scripts
 # Don't copy characters folder as we'll get it from GCS
 
 # Install dependencies and build the project
-RUN pnpm install \
+RUN pnpm install --frozen-lockfile \
     && pnpm build-docker \
     && pnpm prune --prod
 
