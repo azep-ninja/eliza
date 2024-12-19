@@ -59,7 +59,14 @@ echo "Verifying directory structure..."
 ls -la "$AGENT_DATA_DIR"
 ls -la "$AGENT_DATA_DIR/data"
 
-# Get secrets from Secret Manager with error checking
+# Pull latest image with verification
+echo "Pulling latest image..."
+if ! docker pull us-central1-docker.pkg.dev/${PROJECT_ID}/${FULL_NAME}:${version}; then
+    echo "Failed to pull image"
+    exit 1
+fi
+
+# Get secrets from Secret Manager
 echo "Fetching secrets..."
 AGENTS_BUCKET_NAME=$(gcloud secrets versions access latest --secret="agents-bucket-name") || {
     echo "Failed to fetch agents-bucket-name secret"
@@ -78,25 +85,22 @@ GOOGLE_GENERATIVE_AI_API_KEY=$(gcloud secrets versions access latest --secret="g
     exit 1
 }
 
-# Debug environment variables
-echo "Debug: Environment variables:"
-echo "AGENTS_BUCKET_NAME: ${AGENTS_BUCKET_NAME:-not set}"
-echo "CHARACTER_FILE: ${CHARACTER_FILE:-not set}"
-echo "SMALL_GOOGLE_MODEL: ${SMALL_GOOGLE_MODEL:0:5}... (truncated)"
-echo "MEDIUM_GOOGLE_MODEL: ${MEDIUM_GOOGLE_MODEL:0:5}... (truncated)"
-echo "GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:0:5}... (truncated)"
+# Debug existing environment variables
+echo "Debug: Checking existing environment variables:"
+echo "AGENTS_BUCKET_NAME from environment: ${AGENTS_BUCKET_NAME}"
+echo "CHARACTER_FILE from environment: ${CHARACTER_FILE}"
 
 # Run container with persistent storage and restart policy
-echo "Starting container..."
+echo "Starting container with environment variables..."
 docker run -d \
     --name ${FULL_NAME} \
     --restart=always \
     -v "$AGENT_DATA_DIR/data":/app/agent/data \
-    -e AGENTS_BUCKET_NAME="${AGENTS_BUCKET_NAME:?'AGENTS_BUCKET_NAME not set'}" \
-    -e CHARACTER_FILE="${CHARACTER_FILE:?'CHARACTER_FILE not set'}" \
-    -e SMALL_GOOGLE_MODEL="${SMALL_GOOGLE_MODEL:?'SMALL_GOOGLE_MODEL not set'}" \
-    -e MEDIUM_GOOGLE_MODEL="${MEDIUM_GOOGLE_MODEL:?'MEDIUM_GOOGLE_MODEL not set'}" \
-    -e GOOGLE_GENERATIVE_AI_API_KEY="${GOOGLE_GENERATIVE_AI_API_KEY:?'GOOGLE_GENERATIVE_AI_API_KEY not set'}" \
+    -e AGENTS_BUCKET_NAME="${AGENTS_BUCKET_NAME}" \
+    -e CHARACTER_FILE="${CHARACTER_FILE}" \
+    -e SMALL_GOOGLE_MODEL="${SMALL_GOOGLE_MODEL}" \
+    -e MEDIUM_GOOGLE_MODEL="${MEDIUM_GOOGLE_MODEL}" \
+    -e GOOGLE_GENERATIVE_AI_API_KEY="${GOOGLE_GENERATIVE_AI_API_KEY}" \
     -e PORT="8080" \
     -e SERVER_PORT="8080" \
     us-central1-docker.pkg.dev/${PROJECT_ID}/${FULL_NAME}:${version}
@@ -110,7 +114,10 @@ if ! docker ps | grep ${FULL_NAME}; then
     exit 1
 fi
 
-# Show container logs
+# Show container logs and verify environment variables
+echo "Container environment variables:"
+docker exec ${FULL_NAME} env | grep -E 'AGENTS_BUCKET_NAME|CHARACTER_FILE'
+
 echo "Initial container logs:"
 docker logs ${FULL_NAME}
 
