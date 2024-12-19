@@ -57,9 +57,6 @@ RUN mkdir -p characters
 # Add debugging and error handling to startup command
 CMD sh -c '\
     echo "Debug: Starting container" && \
-    echo "Debug: Environment variables:" && \
-    echo "SMALL_GOOGLE_MODEL=${SMALL_GOOGLE_MODEL}" && \
-    echo "MEDIUM_GOOGLE_MODEL=${MEDIUM_GOOGLE_MODEL}" && \
     echo "Debug: AGENTS_BUCKET_NAME=${AGENTS_BUCKET_NAME}" && \
     echo "Debug: CHARACTER_FILE=${CHARACTER_FILE}" && \
     echo "Debug: Full GCS path=gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE}" && \
@@ -71,5 +68,12 @@ CMD sh -c '\
     fi && \
     echo "Debug: Attempting to copy character file..." && \
     gsutil cp gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE} characters/${CHARACTER_FILE} && \
+    # Get secrets directly when starting the application
+    export SMALL_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="small-google-model") && \
+    export MEDIUM_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="medium-google-model") && \
+    export GOOGLE_GENERATIVE_AI_API_KEY=$(gcloud secrets versions access latest --secret="google-generative-ai-key") && \
+    echo "Debug: Environment variables:" && \
+    echo "SMALL_GOOGLE_MODEL=${SMALL_GOOGLE_MODEL}" && \
+    echo "MEDIUM_GOOGLE_MODEL=${MEDIUM_GOOGLE_MODEL}" && \
     echo "Debug: Starting application..." && \
     pnpm start --non-interactive --characters=characters/${CHARACTER_FILE}'
