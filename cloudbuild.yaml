@@ -88,13 +88,20 @@ steps:
     full_name=$(cat /workspace/full_name)
     version=$(cat /workspace/version)
     bucket_name=$(gcloud secrets versions access latest --secret="agents-bucket-name")
+    small_google_model=$(gcloud secrets versions access latest --secret="small-google-model")
+    medium_google_model=$(gcloud secrets versions access latest --secret="medium-google-model")
+    google_generative_api=$(gcloud secrets versions access latest --secret="google-generative-ai-key)
     echo "Working with instance: ${full_name}"
     echo "Checking for existing instance..."
     if [[ $(gcloud compute instances list --filter="name=${full_name}" --format="get(name)") ]]; then
       echo "Updating existing instance ${full_name}"
       gcloud compute instances update-container ${full_name} \
         --container-image us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name}:${version} \
-        --container-env AGENTS_BUCKET_NAME=${bucket_name},CHARACTER_FILE=${_CHARACTER_FILE} \
+        --container-env AGENTS_BUCKET_NAME=${bucket_name},\
+    CHARACTER_FILE=${_CHARACTER_FILE},\
+    SMALL_GOOGLE_MODEL=${small_google_model},\
+    MEDIUM_GOOGLE_MODEL=${medium_google_model},\
+    GOOGLE_GENERATIVE_AI_API_KEY=${google_generative_api} \
         --zone $_ZONE || { echo "Instance update failed"; exit 1; }
       echo "Instance update completed"
     else
@@ -109,9 +116,9 @@ steps:
         --boot-disk-size $_DISK_SIZE \
         --container-env AGENTS_BUCKET_NAME=${bucket_name},\
     CHARACTER_FILE=${_CHARACTER_FILE},\
-    SMALL_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="small-google-model"),\
-    MEDIUM_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="medium-google-model"),\
-    GOOGLE_GENERATIVE_AI_API_KEY=$(gcloud secrets versions access latest --secret="google-generative-ai-key") \
+    SMALL_GOOGLE_MODEL=${small_google_model},\
+    MEDIUM_GOOGLE_MODEL=${medium_google_model},\
+    GOOGLE_GENERATIVE_AI_API_KEY=${google_generative_api} \
         --metadata-from-file startup-script=startup.sh || { echo "Instance creation failed"; exit 1; }
       echo "Instance creation completed"
     fi
