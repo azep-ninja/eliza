@@ -95,6 +95,7 @@ steps:
       gcloud compute instances update-container ${full_name} \
         --container-image us-central1-docker.pkg.dev/$PROJECT_ID/qi-agents/${full_name}:${version} \
         --container-env AGENTS_BUCKET_NAME=${bucket_name},CHARACTER_FILE=${_CHARACTER_FILE} \
+        --scopes=cloud-platform \
         --zone $_ZONE || { echo "Instance update failed"; exit 1; }
       echo "Instance update completed"
     else
@@ -108,6 +109,7 @@ steps:
         --no-address \
         --boot-disk-size $_DISK_SIZE \
         --container-env AGENTS_BUCKET_NAME=${bucket_name},CHARACTER_FILE=${_CHARACTER_FILE} \
+        --scopes=cloud-platform \
         --metadata-from-file startup-script=startup.sh || { echo "Instance creation failed"; exit 1; }
       echo "Instance creation completed"
     fi
