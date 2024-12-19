@@ -110,6 +110,7 @@ steps:
         --boot-disk-size $_DISK_SIZE \
         --container-env AGENTS_BUCKET_NAME=${bucket_name},CHARACTER_FILE=${_CHARACTER_FILE} \
         --scopes=cloud-platform \
+        --service-account=$_SERVICE_ACCOUNT \
         --metadata-from-file startup-script=startup.sh || { echo "Instance creation failed"; exit 1; }
       echo "Instance creation completed"
     fi
@@ -120,6 +121,7 @@ substitutions:
   _DISK_SIZE: 30GB
   _NETWORK: agents-vpc
   _SUBNET: agents-subnet
+  _SERVICE_ACCOUNT: SERVICE-ACCOUNT@[PROJECT-ID].iam.gserviceaccount.com
   _CHARACTER_FILE: default.character.json
   _SUFFIX: agent
 
