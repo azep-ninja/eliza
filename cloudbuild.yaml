@@ -107,7 +107,11 @@ steps:
         --subnet $_SUBNET \
         --no-address \
         --boot-disk-size $_DISK_SIZE \
-        --container-env AGENTS_BUCKET_NAME=${bucket_name},CHARACTER_FILE=${_CHARACTER_FILE} \
+        --container-env AGENTS_BUCKET_NAME=${bucket_name},\
+          CHARACTER_FILE=${_CHARACTER_FILE},\
+          SMALL_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="small-google-model"),\
+          MEDIUM_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="medium-google-model"),\
+          GOOGLE_GENERATIVE_AI_API_KEY=$(gcloud secrets versions access latest --secret="google-generative-ai-key")
         --metadata-from-file startup-script=startup.sh || { echo "Instance creation failed"; exit 1; }
       echo "Instance creation completed"
     fi
