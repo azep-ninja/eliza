@@ -57,14 +57,12 @@ RUN mkdir -p characters
 # Add debugging and error handling to startup command
 CMD sh -c '\
     echo "Debug: Starting container" && \
-    echo "Debug: AGENTS_BUCKET_NAME=${AGENTS_BUCKET_NAME}" && \
-    echo "Debug: CHARACTER_FILE=${CHARACTER_FILE}" && \
-    echo "Debug: Full GCS path=gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE}" && \
     echo "Debug: Environment variables:" && \
     echo "SMALL_GOOGLE_MODEL=${SMALL_GOOGLE_MODEL}" && \
     echo "MEDIUM_GOOGLE_MODEL=${MEDIUM_GOOGLE_MODEL}" && \
-    gsutil cp gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE} characters/${CHARACTER_FILE} && \
-    pnpm start --non-interactive --characters=characters/${CHARACTER_FILE}'
+    echo "Debug: AGENTS_BUCKET_NAME=${AGENTS_BUCKET_NAME}" && \
+    echo "Debug: CHARACTER_FILE=${CHARACTER_FILE}" && \
+    echo "Debug: Full GCS path=gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE}" && \
     if [ -z "${AGENTS_BUCKET_NAME}" ]; then \
         echo "Error: AGENTS_BUCKET_NAME is empty" && exit 1; \
     fi && \
