@@ -1,5 +1,5 @@
 steps:
-# Set agent name based on character file
+# Set agent name based on character file and suffix
 - name: 'gcr.io/cloud-builders/gcloud'
   entrypoint: 'bash'
   args:
