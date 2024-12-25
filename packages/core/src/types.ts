@@ -657,6 +657,7 @@ export type Character = {
         continueMessageHandlerTemplate?: string;
         evaluationTemplate?: string;
         twitterSearchTemplate?: string;
+        twitterActionTemplate?: string;
         twitterPostTemplate?: string;
         twitterMessageHandlerTemplate?: string;
         twitterShouldRespondTemplate?: string;
@@ -710,6 +711,20 @@ export type Character = {
     settings?: {
         secrets?: { [key: string]: string };
         intiface?: boolean;
+        imageSettings?: {
+            steps?: number;
+            width?: number;
+            height?: number;
+            negativePrompt?: string;
+            numIterations?: number;
+            guidanceScale?: number;
+            seed?: number;
+            modelId?: string;
+            jobId?: string;
+            count?: number;
+            stylePreset?: string;
+            hideWatermark?: boolean;
+        };
         voice?: {
             model?: string; // For VITS
             url?: string; // Legacy VITS support
@@ -776,7 +791,6 @@ export type Character = {
         slack?: {
             shouldIgnoreBotMessages?: boolean;
             shouldIgnoreDirectMessages?: boolean;
-
         };
     };
 
@@ -798,7 +812,7 @@ export type Character = {
     /** Optional NFT prompt */
     nft?: {
         prompt: string;
-    }
+    };
 };
 
 /**
@@ -1062,6 +1076,12 @@ export interface IRAGKnowledgeManager {
 export type CacheOptions = {
     expires?: number;
 };
+
+export enum CacheStore {
+    REDIS = "redis",
+    DATABASE = "database",
+    FILESYSTEM = "filesystem",
+}
 
 export interface ICacheManager {
     get<T = unknown>(key: string): Promise<T | undefined>;

@@ -1,7 +1,7 @@
 export * from "./sqliteTables.ts";
 export * from "./sqlite_vec.ts";
 
-import { DatabaseAdapter, elizaLogger, IDatabaseCacheAdapter } from "@ai16z/eliza";
+import { DatabaseAdapter, IDatabaseCacheAdapter } from "@elizaos/core";
 import {
     Account,
     Actor,
@@ -12,7 +12,7 @@ import {
     type Relationship,
     type UUID,
     RAGKnowledgeItem
-} from "@ai16z/eliza";
+} from "@elizaos/core";
 import { Database } from "better-sqlite3";
 import { v4 } from "uuid";
 import { load } from "./sqlite_vec.ts";
