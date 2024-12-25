@@ -7,6 +7,7 @@ export function loadVecExtensions(db: Database): void {
     try {
         // Load sqlite-vec extensions
         sqliteVec.load(db);
+
         elizaLogger.log("sqlite-vec extensions loaded successfully.");
     } catch (error) {
         elizaLogger.error("Failed to load sqlite-vec extensions:", error);

@@ -27,6 +27,8 @@ import { VoiceManager } from "./voice.ts";
 import {
     discordShouldRespondTemplate,
     discordMessageHandlerTemplate,
+    discordAutoPostTemplate,
+    discordAnnouncementHypeTemplate
 } from "./templates.ts";
 import {
     IGNORE_RESPONSE_WORDS,
@@ -48,6 +50,16 @@ interface MessageContext {
     timestamp: number;
 }
 
+interface AutoPostConfig {
+    enabled: boolean;
+    monitorTime: number;
+    inactivityThreshold: number; // milliseconds
+    mainChannelId: string;
+    announcementChannelIds: string[];
+    lastAutoPost?: number;
+    minTimeBetweenPosts?: number; // minimum time between auto posts
+}
+
 export type InterestChannels = {
     [key: string]: {
         currentHandler: string | undefined;
@@ -65,6 +77,10 @@ export class MessageManager {
     private interestChannels: InterestChannels = {};
     private discordClient: any;
     private voiceManager: VoiceManager;
+    //Auto post
+    private autoPostConfig: AutoPostConfig;
+    private lastChannelActivity: { [channelId: string]: number } = {};
+    private autoPostInterval: NodeJS.Timeout;
 
     constructor(discordClient: any, voiceManager: VoiceManager) {
         this.client = discordClient.client;
@@ -72,9 +88,25 @@ export class MessageManager {
         this.discordClient = discordClient;
         this.runtime = discordClient.runtime;
         this.attachmentManager = new AttachmentManager(this.runtime);
+
+        this.autoPostConfig = {
+            enabled: this.runtime.character.clientConfig?.discord?.autoPost?.enabled || false,
+            monitorTime: this.runtime.character.clientConfig?.discord?.autoPost?.monitorTime || 300000,
+            inactivityThreshold: this.runtime.character.clientConfig?.discord?.autoPost?.inactivityThreshold || 3600000, // 1 hour default
+            mainChannelId: this.runtime.character.clientConfig?.discord?.autoPost?.mainChannelId,
+            announcementChannelIds: this.runtime.character.clientConfig?.discord?.autoPost?.announcementChannelIds || [],
+            minTimeBetweenPosts: this.runtime.character.clientConfig?.discord?.autoPost?.minTimeBetweenPosts || 7200000, // 2 hours default
+        };
+
+        if (this.autoPostConfig.enabled) {
+            this._startAutoPostMonitoring();
+        }
     }
 
     async handleMessage(message: DiscordMessage) {
+        // Update last activity time for the channel
+        this.lastChannelActivity[message.channelId] = Date.now();
+
         if (
             message.interaction ||
             message.author.id ===
@@ -507,47 +539,6 @@ export class MessageManager {
         }
     }
 
-    private _isMessageForMe(message: DiscordMessage): boolean {
-        const isMentioned = message.mentions.users?.has(
-            this.client.user?.id as string
-        );
-        const guild = message.guild;
-        const member = guild?.members.cache.get(this.client.user?.id as string);
-        const nickname = member?.nickname;
-
-        // Don't consider role mentions as direct mentions
-        const hasRoleMentionOnly =
-            message.mentions.roles.size > 0 && !isMentioned;
-
-        // If it's only a role mention and we're in team mode, let team logic handle it
-        if (
-            hasRoleMentionOnly &&
-            this.runtime.character.clientConfig?.discord?.isPartOfTeam
-        ) {
-            return false;
-        }
-
-        return (
-            isMentioned ||
-            (!this.runtime.character.clientConfig?.discord
-                ?.shouldRespondOnlyToMentions &&
-                (message.content
-                    .toLowerCase()
-                    .includes(
-                        this.client.user?.username.toLowerCase() as string
-                    ) ||
-                    message.content
-                        .toLowerCase()
-                        .includes(
-                            this.client.user?.tag.toLowerCase() as string
-                        ) ||
-                    (nickname &&
-                        message.content
-                            .toLowerCase()
-                            .includes(nickname.toLowerCase()))))
-        );
-    }
-
     async processMessageMedia(
         message: DiscordMessage
     ): Promise<{ processedContent: string; attachments: Media[] }> {
@@ -640,6 +631,257 @@ export class MessageManager {
         }
 
         return { processedContent, attachments };
+    }
+
+    private _startAutoPostMonitoring(): void {
+        // Wait for client to be ready
+        if (!this.client.isReady()) {
+            elizaLogger.info('[AutoPost Discord] Client not ready, waiting for ready event')
+            this.client.once('ready', () => {
+                elizaLogger.info('[AutoPost Discord] Client ready, starting monitoring')
+                this._initializeAutoPost();
+            });
+        } else {
+            elizaLogger.info('[AutoPost Discord] Client already ready, starting monitoring')
+            this._initializeAutoPost();
+        }
+    }
+
+    private _initializeAutoPost(): void {
+        // Give the client a moment to fully load its cache
+        setTimeout(() => {
+            // Monitor every 5 minutes
+            this.autoPostInterval = setInterval(() => {
+                this._checkChannelActivity();
+            }, 300000);
+
+            // Start monitoring announcement channels
+            this._monitorAnnouncementChannels();
+        }, 5000); // 5 second delay to ensure everything is loaded
+    }
+
+    private async _checkChannelActivity(): Promise<void> {
+        if (!this.autoPostConfig.enabled || !this.autoPostConfig.mainChannelId) return;
+
+        const channel = this.client.channels.cache.get(this.autoPostConfig.mainChannelId) as TextChannel;
+        if (!channel) return;
+
+        try {
+            // Get last message time
+            const messages = await channel.messages.fetch({ limit: 1 });
+            const lastMessage = messages.first();
+            const lastMessageTime = lastMessage ? lastMessage.createdTimestamp : 0;
+
+            const now = Date.now();
+            const timeSinceLastMessage = now - lastMessageTime;
+            const timeSinceLastAutoPost = now - (this.autoPostConfig.lastAutoPost || 0);
+
+            // Check if we should post
+            if (timeSinceLastMessage > this.autoPostConfig.inactivityThreshold &&
+                timeSinceLastAutoPost > (this.autoPostConfig.minTimeBetweenPosts || 0)) {
+
+                try {
+                    // Create memory and generate response
+                    const roomId = stringToUuid(channel.id + "-" + this.runtime.agentId);
+
+                    const memory = {
+                        id: stringToUuid(`autopost-${Date.now()}`),
+                        userId: this.runtime.agentId,
+                        agentId: this.runtime.agentId,
+                        roomId,
+                        content: { text: "AUTO_POST_ENGAGEMENT", source: "discord" },
+                        embedding: getEmbeddingZeroVector(),
+                        createdAt: Date.now()
+                    };
+
+                    let state = await this.runtime.composeState(memory, {
+                        discordClient: this.client,
+                        discordMessage: null,
+                        agentName: this.runtime.character.name || this.client.user?.displayName
+                    });
+
+                    // Generate response using template
+                    const context = composeContext({
+                        state,
+                        template: this.runtime.character.templates?.discordAutoPostTemplate || discordAutoPostTemplate
+                    });
+
+                    const responseContent = await this._generateResponse(memory, state, context);
+                    if (!responseContent?.text) return;
+
+                    // Send message and update memory
+                    const messages = await sendMessageInChunks(channel, responseContent.text.trim(), null, []);
+
+                    // Create and store memories
+                    const memories = messages.map(m => ({
+                        id: stringToUuid(m.id + "-" + this.runtime.agentId),
+                        userId: this.runtime.agentId,
+                        agentId: this.runtime.agentId,
+                        content: {
+                            ...responseContent,
+                            url: m.url,
+                        },
+                        roomId,
+                        embedding: getEmbeddingZeroVector(),
+                        createdAt: m.createdTimestamp,
+                    }));
+
+                    for (const m of memories) {
+                        await this.runtime.messageManager.createMemory(m);
+                    }
+
+                    // Update state and last post time
+                    this.autoPostConfig.lastAutoPost = Date.now();
+                    state = await this.runtime.updateRecentMessageState(state);
+                    await this.runtime.evaluate(memory, state, true);
+                } catch (error) {
+                    elizaLogger.warn("[AutoPost Discord] Error:", error);
+                }
+            } else {
+                elizaLogger.warn("[AutoPost Discord] Activity within threshold. Not posting.");
+            }
+        } catch (error) {
+            elizaLogger.warn("[AutoPost Discord] Error checking last message:", error);
+        }
+    }
+
+    private async _monitorAnnouncementChannels(): Promise<void> {
+        if (!this.autoPostConfig.enabled || !this.autoPostConfig.announcementChannelIds.length) {
+            elizaLogger.warn('[AutoPost Discord] Auto post config disabled or no announcement channels')
+            return;
+        }
+
+        for (const announcementChannelId of this.autoPostConfig.announcementChannelIds) {
+            const channel = this.client.channels.cache.get(announcementChannelId);
+
+            if (channel) {
+                // Check if it's either a text channel or announcement channel
+                // ChannelType.GuildAnnouncement is 5
+                // ChannelType.GuildText is 0
+                if (channel instanceof TextChannel || channel.type === ChannelType.GuildAnnouncement) {
+                    const newsChannel = channel as TextChannel;
+                    try {
+                        newsChannel.createMessageCollector().on('collect', async (message: DiscordMessage) => {
+                            if (message.author.bot || Date.now() - message.createdTimestamp > 300000) return;
+
+                            const mainChannel = this.client.channels.cache.get(this.autoPostConfig.mainChannelId) as TextChannel;
+                            if (!mainChannel) return;
+
+                            try {
+                                // Create memory and generate response
+                                const roomId = stringToUuid(mainChannel.id + "-" + this.runtime.agentId);
+                                const memory = {
+                                    id: stringToUuid(`announcement-${Date.now()}`),
+                                    userId: this.runtime.agentId,
+                                    agentId: this.runtime.agentId,
+                                    roomId,
+                                    content: {
+                                        text: message.content,
+                                        source: "discord",
+                                        metadata: { announcementUrl: message.url }
+                                    },
+                                    embedding: getEmbeddingZeroVector(),
+                                    createdAt: Date.now()
+                                };
+
+                                let state = await this.runtime.composeState(memory, {
+                                    discordClient: this.client,
+                                    discordMessage: message,
+                                    announcementContent: message?.content,
+                                    announcementChannelId: channel.id,
+                                    agentName: this.runtime.character.name || this.client.user?.displayName
+                                });
+
+                                // Generate response using template
+                                const context = composeContext({
+                                    state,
+                                    template: this.runtime.character.templates?.discordAnnouncementHypeTemplate || discordAnnouncementHypeTemplate
+
+                                });
+
+                                const responseContent = await this._generateResponse(memory, state, context);
+                                if (!responseContent?.text) return;
+
+                                // Send message and update memory
+                                const messages = await sendMessageInChunks(mainChannel, responseContent.text.trim(), null, []);
+
+                                // Create and store memories
+                                const memories = messages.map(m => ({
+                                    id: stringToUuid(m.id + "-" + this.runtime.agentId),
+                                    userId: this.runtime.agentId,
+                                    agentId: this.runtime.agentId,
+                                    content: {
+                                        ...responseContent,
+                                        url: m.url,
+                                    },
+                                    roomId,
+                                    embedding: getEmbeddingZeroVector(),
+                                    createdAt: m.createdTimestamp,
+                                }));
+
+                                for (const m of memories) {
+                                    await this.runtime.messageManager.createMemory(m);
+                                }
+
+                                // Update state
+                                state = await this.runtime.updateRecentMessageState(state);
+                                await this.runtime.evaluate(memory, state, true);
+                            } catch (error) {
+                                elizaLogger.warn("[AutoPost Discord] Announcement Error:", error);
+                            }
+                        });
+                        elizaLogger.info(`[AutoPost Discord] Successfully set up collector for announcement channel: ${newsChannel.name}`);
+                    } catch (error) {
+                        elizaLogger.warn(`[AutoPost Discord] Error setting up announcement channel collector:`, error);
+                    }
+                } else {
+                    elizaLogger.warn(`[AutoPost Discord] Channel ${announcementChannelId} is not a valid announcement or text channel, type:`, channel.type);
+                }
+            } else {
+                elizaLogger.warn(`[AutoPost Discord] Could not find channel ${announcementChannelId} directly`);
+            }
+        }
+    }
+
+    private _isMessageForMe(message: DiscordMessage): boolean {
+        const isMentioned = message.mentions.users?.has(
+            this.client.user?.id as string
+        );
+        const guild = message.guild;
+        const member = guild?.members.cache.get(this.client.user?.id as string);
+        const nickname = member?.nickname;
+
+        // Don't consider role mentions as direct mentions
+        const hasRoleMentionOnly =
+            message.mentions.roles.size > 0 && !isMentioned;
+
+        // If it's only a role mention and we're in team mode, let team logic handle it
+        if (
+            hasRoleMentionOnly &&
+            this.runtime.character.clientConfig?.discord?.isPartOfTeam
+        ) {
+            return false;
+        }
+
+        return (
+            isMentioned ||
+            (!this.runtime.character.clientConfig?.discord
+                ?.shouldRespondOnlyToMentions &&
+                (message.content
+                    .toLowerCase()
+                    .includes(
+                        this.client.user?.username.toLowerCase() as string
+                    ) ||
+                    message.content
+                        .toLowerCase()
+                        .includes(
+                            this.client.user?.tag.toLowerCase() as string
+                        ) ||
+                    (nickname &&
+                        message.content
+                            .toLowerCase()
+                            .includes(nickname.toLowerCase()))))
+        );
     }
 
     private _getNormalizedUserId(id: string): string {
@@ -1267,25 +1509,57 @@ export class MessageManager {
     ): Promise<Content> {
         const { userId, roomId } = message;
 
-        const response = await generateMessageResponse({
-            runtime: this.runtime,
-            context,
-            modelClass: ModelClass.LARGE,
-        });
+        try {
+            const response = await generateMessageResponse({
+                runtime: this.runtime,
+                context,
+                modelClass: ModelClass.LARGE,
+            });
 
-        if (!response) {
-            console.error("No response from generateMessageResponse");
-            return;
+            if (!response) {
+                elizaLogger.error("[Discord: _generateResponse] No response from generateMessageResponse");
+                return;
+            }
+
+            // Add specific handling for auto-posts
+            if (message.content.text === "AUTO_POST_ENGAGEMENT" && response.text) {
+                // Ensure we set action to NONE for auto-posts
+                response.action = "NONE";
+            }
+
+            await this.runtime.databaseAdapter.log({
+                body: { message, context, response },
+                userId: userId,
+                roomId,
+                type: "response",
+            });
+
+            return response;
+        } catch (error) {
+            elizaLogger.error("[Discord: _generateResponse] Error generating response:", error);
+            throw error;
         }
 
-        await this.runtime.databaseAdapter.log({
-            body: { message, context, response },
-            userId: userId,
-            roomId,
-            type: "response",
-        });
+        // const response = await generateMessageResponse({
+        //     runtime: this.runtime,
+        //     context,
+        //     modelClass: ModelClass.LARGE,
+        // });
 
-        return response;
+
+        // if (!response) {
+        //     console.error("No response from generateMessageResponse");
+        //     return;
+        // }
+
+        // await this.runtime.databaseAdapter.log({
+        //     body: { message, context, response },
+        //     userId: userId,
+        //     roomId,
+        //     type: "response",
+        // });
+
+        // return response;
     }
 
     async fetchBotName(botToken: string) {
