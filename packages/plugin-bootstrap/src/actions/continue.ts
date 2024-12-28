@@ -110,7 +110,10 @@ export const continueAction: Action = {
 
         // Check for immediate double response (responding twice in a row to the same message)
         const lastAgentMessage = agentMessages[0];
+        console.log(`[CONTINUE] Last agent message inReplyTo: ${lastAgentMessage?.content?.inReplyTo}`);
+        console.log(`[CONTINUE] Current message id: ${message.id}`);
         if (lastAgentMessage?.content?.inReplyTo === message.id) {
+            console.log('[CONTINUE] Matched inReplyTo with current message');
             // If our last message was already a response to this message, only allow continue if:
             // 1. The last message had a CONTINUE action
             // 2. We haven't hit the maxContinuesInARow limit
