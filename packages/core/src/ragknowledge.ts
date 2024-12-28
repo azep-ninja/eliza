@@ -4,13 +4,10 @@ import {
     IRAGKnowledgeManager,
     RAGKnowledgeItem,
     UUID,
-    IAgentRuntime,
-    ServiceType,
-    IPdfService,
+    IAgentRuntime
 } from "./types.ts";
 import { splitChunks } from "./generation.ts";
 import { stringToUuid } from "./uuid.ts";
-import * as pdfjsLib from 'pdfjs-dist';
 
 /**
  * Manage knowledge in the database.
@@ -140,12 +137,14 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
                     searchText = `${relevantContext} ${processedQuery}`;
                 }
 
-                const embedding = await embed(this.runtime, searchText);
+                const embeddingArray = await embed(this.runtime, searchText);
+
+                const embedding = new Float32Array(embeddingArray);
 
                 // Get results with single query
                 const results = await this.runtime.databaseAdapter.searchKnowledge({
                     agentId: this.runtime.agentId,
-                    embedding: new Float32Array(embedding),
+                    embedding: embedding,
                     match_threshold: this.defaultRAGMatchThreshold,
                     match_count: (params.limit || this.defaultRAGMatchCount) * 2,
                     searchText: processedQuery
@@ -206,7 +205,9 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
         try {
             // Process main document
             const processedContent = this.preprocess(item.content.text);
-            const mainEmbedding = await embed(this.runtime, processedContent);
+            const mainEmbeddingArray = await embed(this.runtime, processedContent);
+
+            const mainEmbedding = new Float32Array(mainEmbeddingArray);
 
             // Create main document
             await this.runtime.databaseAdapter.createKnowledge({
@@ -227,7 +228,8 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
             const chunks = await splitChunks(processedContent, 512, 20);
 
             for (const [index, chunk] of chunks.entries()) {
-                const chunkEmbedding = await embed(this.runtime, chunk);
+                const chunkEmbeddingArray = await embed(this.runtime, chunk);
+                const chunkEmbedding = new Float32Array(chunkEmbeddingArray);
                 const chunkId = `${item.id}-chunk-${index}` as UUID;
 
                 await this.runtime.databaseAdapter.createKnowledge({
@@ -266,9 +268,11 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
             searchText
         } = params;
 
+        const float32Embedding = Array.isArray(embedding) ? new Float32Array(embedding) : embedding;
+
         return await this.runtime.databaseAdapter.searchKnowledge({
             agentId: params.agentId || this.runtime.agentId,
-            embedding: Array.isArray(embedding) ? new Float32Array(embedding) : embedding,
+            embedding: float32Embedding,
             match_threshold,
             match_count,
             searchText

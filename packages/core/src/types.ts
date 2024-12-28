@@ -792,6 +792,13 @@ export type Character = {
             shouldIgnoreBotMessages?: boolean;
             shouldIgnoreDirectMessages?: boolean;
         };
+        gitbook?: {
+            keywords?: {
+                projectTerms?: string[];
+                generalQueries?: string[];
+            };
+            documentTriggers?: string[];
+        };
     };
 
     /** Writing style guides */
@@ -1334,7 +1341,7 @@ export interface RAGKnowledgeItem {
             [key: string]: unknown;
         };
     };
-    embedding?: number[];
+    embedding?: Float32Array;
     createdAt?: number;
     similarity?: number;
     score?: number;

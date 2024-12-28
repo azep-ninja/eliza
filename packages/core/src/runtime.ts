@@ -527,7 +527,7 @@ export class AgentRuntime implements IAgentRuntime {
                         if (existingKnowledge.length > 0) {
                             const existingContent = existingKnowledge[0].content.text;
                             if (existingContent === content) {
-                                elizaLogger.info(`File ${item} unchanged, skipping`);
+                                elizaLogger.info(`File ${contentItem} unchanged, skipping`);
                                 continue;
                             } else {
                                 // If content changed, remove old knowledge before adding new
@@ -541,7 +541,7 @@ export class AgentRuntime implements IAgentRuntime {
                             `Successfully read ${fileExtension.toUpperCase()} file content for`,
                             this.character.name,
                             "-",
-                            item
+                            contentItem
                         );
 
                         await this.ragKnowledgeManager.processFile({
@@ -554,7 +554,7 @@ export class AgentRuntime implements IAgentRuntime {
                     } catch (error: any) {
                         hasError = true;
                         elizaLogger.error(
-                            `Failed to read knowledge file ${item}. Error details:`,
+                            `Failed to read knowledge file ${contentItem}. Error details:`,
                             error?.message || error || 'Unknown error'
                         );
                         continue; // Continue to next item even if this one fails

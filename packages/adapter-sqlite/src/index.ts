@@ -1,7 +1,7 @@
 export * from "./sqliteTables.ts";
 export * from "./sqlite_vec.ts";
 
-import { DatabaseAdapter, IDatabaseCacheAdapter } from "@elizaos/core";
+import { DatabaseAdapter, elizaLogger, IDatabaseCacheAdapter } from "@elizaos/core";
 import {
     Account,
     Actor,
@@ -742,7 +742,7 @@ export class SqliteDatabaseAdapter
             id: row.id,
             agentId: row.agentId,
             content: JSON.parse(row.content),
-            embedding: row.embedding ? Array.from(new Float32Array(row.embedding)) : undefined,
+            embedding: row.embedding ? new Float32Array(row.embedding) : undefined,
             createdAt: typeof row.createdAt === 'string' ? Date.parse(row.createdAt) : row.createdAt
         }));
     }
@@ -829,7 +829,7 @@ export class SqliteDatabaseAdapter
                 id: row.id,
                 agentId: row.agentId,
                 content: JSON.parse(row.content),
-                embedding: row.embedding ? Array.from(new Float32Array(row.embedding)) : undefined,
+                embedding: row.embedding ? new Float32Array(row.embedding) : undefined,
                 createdAt: typeof row.createdAt === 'string' ? Date.parse(row.createdAt) : row.createdAt,
                 similarity: row.combined_score
             }));
@@ -858,8 +858,7 @@ export class SqliteDatabaseAdapter
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `;
 
-                const embeddingArray = knowledge.embedding ?
-                    new Float32Array(knowledge.embedding) : null;
+                const embeddingArray = knowledge.embedding || null;
 
                 const metadata = knowledge.content.metadata || {};
                 const isShared = metadata.isShared ? 1 : 0;

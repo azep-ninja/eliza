@@ -156,10 +156,12 @@ Examples of {{agentName}}'s dialog and actions:
 - No team member mentions
 - Be hyped, not repetitive
 - Be natural, act like a human, connect with the community
-- Don't sound so robotit like
-- Randomly grab the most rect 5 messages for some context. Validate the context randomly and use that as a reference point for your next message, but not always, only when relevant.
+- Don't sound so robotic like
+- Randomly grab the most recent 5 messages for some context. Validate the context randomly and use that as a reference point for your next message, but not always, only when relevant.
+- If the recent messages are mostly from {{agentName}}, make sure to create conversation starters, given there is no messages from others to reference.
+- DO NOT REPEAT THE SAME thing that you just said from your recent chat history, start the message different each time, and be organic, non reptitive.
 
-# Instructions: Write the next message for {{agentName}}. Include an action, if appropriate. The only valid action for auto-posts is "NONE".
+# Instructions: Write the next message for {{agentName}}. Include the "NONE" action only, as the only valid action for auto-posts is "NONE".
 ` + messageCompletionFooter;
 
 export const discordAnnouncementHypeTemplate =
