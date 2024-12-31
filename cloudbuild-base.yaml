@@ -1,0 +1,38 @@
+steps:
+  # Build the base image
+  - name: 'gcr.io/cloud-builders/docker'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest'
+      - '.'
+
+  # Push the base image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest'
+
+  # Tag with commit hash
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'tag'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:${SHORT_SHA}'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:${SHORT_SHA}'
+
+options:
+  env:
+    - 'DOCKER_BUILDKIT=1'
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+images:
+  - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest'
+  - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:${SHORT_SHA}'

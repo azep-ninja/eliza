@@ -1,0 +1,55 @@
+steps:
+# Setup character files
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    echo "Setting up deployment for ${_DEPLOYMENT_ID}"
+    mkdir -p /app/characters
+    gsutil cp gs://qi-agents-service/${_DEPLOYMENT_ID}/*.character.json /app/characters/
+
+# Create or update instance with random zone selection
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    ZONES=("a" "b" "c" "d" "f")
+    RANDOM_ZONE="${ZONES[$((RANDOM % ${#ZONES[@]}))]}"
+    ZONE="us-east1-$RANDOM_ZONE"
+
+    if [[ $(gcloud compute instances list --filter="name=${_DEPLOYMENT_ID}" --format="get(name)") ]]; then
+      echo "Updating existing instance ${_DEPLOYMENT_ID}"
+      gcloud compute instances update-container ${_DEPLOYMENT_ID} \
+        --container-image us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest \
+        --container-mount-host-path mount-path=/app/characters,host-path=/app/characters \
+        --container-env BUCKET_PATH=${_DEPLOYMENT_ID} \
+        --zone $ZONE
+    else
+      echo "Creating new instance ${_DEPLOYMENT_ID}"
+      gcloud compute instances create-with-container ${_DEPLOYMENT_ID} \
+        --container-image us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest \
+        --machine-type ${_MACHINE_TYPE} \
+        --zone $ZONE \
+        --network agents-vpc \
+        --subnet agents-subnet-primary \
+        --no-address \
+        --boot-disk-size 30GB \
+        --container-mount-host-path mount-path=/app/characters,host-path=/app/characters \
+        --container-env BUCKET_PATH=${_DEPLOYMENT_ID} \
+        --scopes=cloud-platform \
+        --service-account=${_SERVICE_ACCOUNT} \
+        --metadata-from-file startup-script=startup.sh \
+        --tags=agent-vm
+    fi
+
+substitutions:
+  _MACHINE_TYPE: e2-small
+  _SERVICE_ACCOUNT: qi-agents-service@qi-agents-as-a-service.iam.gserviceaccount.com
+  _DEPLOYMENT_ID: ""
+  _VERSION: ""
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
