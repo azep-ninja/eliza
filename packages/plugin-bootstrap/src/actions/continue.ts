@@ -91,8 +91,6 @@ export const continueAction: Action = {
         options: any,
         callback: HandlerCallback
     ) => {
-        console.log(`[CONTINUE] Text: ${message.content.text}`);
-
         if (!state) {
             state = (await runtime.composeState(message)) as State;
         }
@@ -110,31 +108,32 @@ export const continueAction: Action = {
 
         // Check for immediate double response (responding twice in a row to the same message)
         const lastAgentMessage = agentMessages[0];
-        console.log(`[CONTINUE] Last agent message inReplyTo: ${lastAgentMessage?.content?.inReplyTo}`);
-        console.log(`[CONTINUE] Current message id: ${message.id}`);
+
         if (lastAgentMessage?.content?.inReplyTo === message.id) {
-            console.log('[CONTINUE] Matched inReplyTo with current message');
             // If our last message was already a response to this message, only allow continue if:
             // 1. The last message had a CONTINUE action
             // 2. We haven't hit the maxContinuesInARow limit
             const continueCount = agentMessages
-                .slice(0, maxContinuesInARow)
-                .filter((m: Memory) => m.content?.action === 'CONTINUE')
-                .length;
+            .filter((m: Memory) => m.content?.inReplyTo === message.id)
+            .filter((m: Memory) => m.content?.action === 'CONTINUE')
+            .length;
 
             if (continueCount >= maxContinuesInARow) {
-                console.log(`[CONTINUE] Max continues (${maxContinuesInARow}) reached`);
+                elizaLogger.log(`[CONTINUE] Max continues (${maxContinuesInARow}) reached for this message chain`);
                 return;
             }
 
             if (lastAgentMessage.content?.action !== 'CONTINUE') {
-                console.log(`[CONTINUE] Last message wasn't a CONTINUE, preventing double response`);
+                elizaLogger.log(`[CONTINUE] Last message wasn't a CONTINUE, preventing double response`);
                 return;
             }
         }
 
-        // Check if message warrants a stop (question or exclamation)
-        if (message.content.text.endsWith("?") || message.content.text.endsWith("!")) {
+        // Check if our last message or message ended with a question/exclamation and warrants a stop
+        if ((lastAgentMessage && lastAgentMessage.content.text &&
+            (lastAgentMessage.content.text.endsWith("?") ||
+            lastAgentMessage.content.text.endsWith("!"))) || (message.content.text.endsWith("?") || message.content.text.endsWith("!"))) {
+            elizaLogger.log(`[CONTINUE] My last message had question/exclamation. Not proceeding.`);
             return;
         }
 
@@ -143,7 +142,6 @@ export const continueAction: Action = {
             .slice(0, maxContinuesInARow + 1)
             .some((m: { content: any }) => m.content.text === message.content.text);
 
-        console.log(`[CONTINUE] Message Exists: ${messageExists}`);
         if (messageExists) {
             return;
         }
@@ -167,7 +165,7 @@ export const continueAction: Action = {
         // Use AI to determine if we should continue
         const shouldContinue = await _shouldContinue(state);
         if (!shouldContinue) {
-            elizaLogger.log("Not elaborating, returning");
+            elizaLogger.log("[CONTINUE] Not elaborating, returning");
             return;
         }
 
