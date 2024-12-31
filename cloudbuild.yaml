@@ -22,14 +22,14 @@ steps:
     if [[ $(gcloud compute instances list --filter="name=${_DEPLOYMENT_ID}" --format="get(name)") ]]; then
       echo "Updating existing instance ${_DEPLOYMENT_ID}"
       gcloud compute instances update-container ${_DEPLOYMENT_ID} \
-        --container-image us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest \
+        --container-image us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:latest \
         --container-mount-host-path mount-path=/app/characters,host-path=/app/characters \
         --container-env BUCKET_PATH=${_DEPLOYMENT_ID} \
         --zone $ZONE
     else
       echo "Creating new instance ${_DEPLOYMENT_ID}"
       gcloud compute instances create-with-container ${_DEPLOYMENT_ID} \
-        --container-image us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest \
+        --container-image us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:latest \
         --machine-type ${_MACHINE_TYPE} \
         --zone $ZONE \
         --network agents-vpc \

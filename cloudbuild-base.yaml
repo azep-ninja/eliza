@@ -6,26 +6,26 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:latest'
       - '.'
 
   # Push the base image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:latest'
 
   # Tag with commit hash
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'tag'
-      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest'
-      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:${SHORT_SHA}'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:latest'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:${SHORT_SHA}'
 
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:${SHORT_SHA}'
+      - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:${SHORT_SHA}'
 
 options:
   env:
@@ -34,5 +34,5 @@ options:
   machineType: 'E2_HIGHCPU_8'
 
 images:
-  - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:latest'
-  - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base:${SHORT_SHA}'
+  - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:latest'
+  - 'us-east1-docker.pkg.dev/${PROJECT_ID}/qi-agents/base-develop-aaas:${SHORT_SHA}'
