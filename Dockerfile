@@ -35,6 +35,7 @@ RUN apt-get update && \
         curl \
         gnupg \
         ca-certificates && \
+        jq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -75,23 +76,35 @@ CMD sh -c '\
         # Check metadata for updates
         current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger") && \
         if [ "$current_update" != "$last_update" ]; then \
-            echo "Update triggered" && \
+            echo "Update triggered at $(date)" && \
             # Get list of active characters
             active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
-            echo "Active characters: $active_characters" && \
+            echo "Active characters from metadata: $active_characters" && \
             # Copy all character files (even inactive ones)
             echo "Copying all character files..." && \
             gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
-            echo "All character files:" && \
+            echo "Character files in directory:" && \
             ls -la /app/characters/ && \
+            echo "Character files found:" && \
+            for file in /app/characters/*.character.json; do \
+                echo "- $file" \
+            done && \
             # Filter for only active characters
             character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
-                find /app/characters -name "${char}.character.json"; \
+                found_file=$(find /app/characters -name "${char}.character.json") && \
+                if [ -n "$found_file" ]; then \
+                    echo "Found active character file: $found_file" >&2; \
+                    echo "$found_file"; \
+                else \
+                    echo "Warning: No file found for active character: $char" >&2; \
+                fi; \
             done | paste -sd "," -) && \
             if [ -n "$character_files" ]; then \
                 echo "Restarting with active character files: $character_files" && \
                 pkill -f "pnpm start" || true && \
                 pnpm start --non-interactive --characters="$character_files" & \
+            else \
+                echo "Warning: No active character files found to start" \
             fi && \
             last_update=$current_update; \
         fi && \
@@ -99,25 +112,42 @@ CMD sh -c '\
     done & \
     \
     # Initial startup using all available characters
+    echo "Debug: Initial startup at $(date)" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
-    echo "Debug: Copying character files..." && \
+    echo "Debug: Copying initial character files..." && \
     gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
-    echo "Debug: Character files:" && \
+    echo "Debug: Initial character files in directory:" && \
     ls -la /app/characters/ && \
+    echo "Debug: Initial character files found:" && \
+    for file in /app/characters/*.character.json; do \
+        echo "- $file" \
+    done && \
     # Get initial active characters from metadata
     active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     if [ -n "$active_characters" ]; then \
+        echo "Debug: Found active characters in metadata: $active_characters" && \
         character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
-            find /app/characters -name "${char}.character.json"; \
+            found_file=$(find /app/characters -name "${char}.character.json") && \
+            if [ -n "$found_file" ]; then \
+                echo "Found active character file: $found_file" >&2; \
+                echo "$found_file"; \
+            else \
+                echo "Warning: No file found for active character: $char" >&2; \
+            fi; \
         done | paste -sd "," -) && \
-        echo "Starting with active character files: $character_files" && \
-        pnpm start --non-interactive --characters="$character_files"; \
+        if [ -n "$character_files" ]; then \
+            echo "Starting with active character files: $character_files" && \
+            pnpm start --non-interactive --characters="$character_files"; \
+        else \
+            echo "Warning: No active character files found to start" && \
+            exit 1; \
+        fi; \
     else \
         # If no active characters specified, use all available ones
         character_files=$(find /app/characters -name "*.character.json" | paste -sd "," -) && \
         if [ -n "$character_files" ]; then \
-            echo "Starting with all character files: $character_files" && \
+            echo "Starting with all available character files: $character_files" && \
             pnpm start --non-interactive --characters="$character_files"; \
         else \
             echo "ERROR: No character files found in /app/characters/" && \
