@@ -19,10 +19,6 @@ COPY packages ./packages
 COPY agent ./agent
 COPY scripts ./scripts
 
-# Install dependencies and build the project
-# RUN pnpm install && \
-#     pnpm build-docker && \
-#     pnpm prune --prod
 # Install dependencies with fallback
 RUN pnpm install --frozen-lockfile || \
     (echo "Frozen lockfile install failed, trying without..." && \
@@ -92,36 +88,43 @@ RUN mkdir -p characters
 
 # Add debugging to startup command
 CMD sh -c '\
+    normalize_and_copy_characters() {
+        echo "Debug: Copying and normalizing character files..." && \
+        for file in $(gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json"); do \
+            filename=$(basename "$file") && \
+            lowercase_filename=$(echo "$filename" | tr "[:upper:]" "[:lower:]") && \
+            echo "Converting $filename to $lowercase_filename" && \
+            gsutil cp "$file" "/app/characters/$lowercase_filename"; \
+        done && \
+        echo "Debug: Normalized character files in directory:" && \
+        ls -la /app/characters/
+    } && \
+
     echo "Debug: Starting container initialization" && \
     echo "Verifying jq installation..." && \
-    if ! command -v jq &> /dev/null; then \
+    if command -v jq > /dev/null 2>&1; then
+        echo "jq is installed at $(command -v jq)"
+    else
         echo "jq not found. Installing..." && \
         apt-get update && \
         apt-get install -y jq && \
         apt-get clean && \
-        rm -rf /var/lib/apt/lists/*; \
+        rm -rf /var/lib/apt/lists/*
     fi && \
     last_update="" && \
     while true; do \
-        # Check metadata for updates
         current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger") && \
         if [ "$current_update" != "$last_update" ]; then \
             echo "Update triggered at $(date)" && \
             active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
             echo "Active characters from metadata: $active_characters" && \
-            echo "Copying all character files..." && \
-            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
-            echo "Character files in directory:" && \
-            ls -la /app/characters/ && \
-            echo "Character files found:" && \
-            for file in /app/characters/*.character.json; do \
-                echo "- $file"; \
-            done && \
+            normalize_and_copy_characters && \
             if [ -n "$active_characters" ]; then \
                 character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
-                    found_file=$(find /app/characters -name "${char}.character.json") && \
-                    if [ -n "$found_file" ]; then \
-                        echo "Found active character file: $found_file" >&2; \
+                    char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
+                    found_file="/app/characters/${char_lower}.character.json" && \
+                    if [ -f "$found_file" ]; then \
+                        echo "Found active character file: $found_file" >&2 && \
                         echo "$found_file"; \
                     else \
                         echo "Warning: No file found for active character: $char" >&2; \
@@ -144,20 +147,14 @@ CMD sh -c '\
     echo "Debug: Initial startup at $(date)" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
-    echo "Debug: Copying initial character files..." && \
-    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
-    echo "Debug: Initial character files in directory:" && \
-    ls -la /app/characters/ && \
-    echo "Character files found:" && \
-    for file in /app/characters/*.character.json; do \
-        echo "- $file"; \
-    done && \
+    normalize_and_copy_characters && \
     active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     if [ -n "$active_characters" ]; then \
         character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
-            found_file=$(find /app/characters -name "${char}.character.json") && \
-            if [ -n "$found_file" ]; then \
-                echo "Found active character file: $found_file" >&2; \
+            char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
+            found_file="/app/characters/${char_lower}.character.json" && \
+            if [ -f "$found_file" ]; then \
+                echo "Found active character file: $found_file" >&2 && \
                 echo "$found_file"; \
             else \
                 echo "Warning: No file found for active character: $char" >&2; \
