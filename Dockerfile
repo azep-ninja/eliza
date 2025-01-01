@@ -88,38 +88,38 @@ RUN mkdir -p characters
 
 # Add debugging to startup command
 CMD sh -c '\
-    normalize_and_copy_characters() { \
-        echo "Debug: Copying and normalizing character files..." && \
-        echo "Debug: Looking for files in gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" && \
+    # Define file handling function
+    handle_character_files() { \
+        echo "Debug: Checking bucket contents at gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/" && \
         bucket_files=$(gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" 2>/dev/null) && \
-        if [ -z "$bucket_files" ]; then \
-            echo "Debug: No files found in bucket path" && \
-            return 1; \
+        if [ -n "$bucket_files" ]; then \
+            echo "Debug: Found files in bucket: $bucket_files" && \
+            echo "Debug: Copying files to /app/characters/" && \
+            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
+            echo "Debug: Converting filenames to lowercase" && \
+            for file in /app/characters/*.character.json; do \
+                if [ -f "$file" ]; then \
+                    lowercase_name=$(basename "$file" | tr "[:upper:]" "[:lower:]") && \
+                    if [ "$(basename "$file")" != "$lowercase_name" ]; then \
+                        echo "Debug: Converting $(basename "$file") to $lowercase_name" && \
+                        mv "$file" "/app/characters/$lowercase_name"; \
+                    fi \
+                fi \
+            done \
+        else \
+            echo "Debug: No character files found in bucket"; \
         fi && \
-        echo "Debug: Found files in bucket: $bucket_files" && \
-        for file in $bucket_files; do \
-            filename=$(basename "$file") && \
-            lowercase_filename=$(echo "$filename" | tr "[:upper:]" "[:lower:]") && \
-            echo "Debug: Found file: $filename" && \
-            echo "Debug: Converting to: $lowercase_filename" && \
-            if gsutil cp "$file" "/app/characters/$lowercase_filename"; then \
-                echo "Debug: Copied file successfully"; \
-            else \
-                echo "Error: Failed to copy $file"; \
-                return 1; \
-            fi \
-        done && \
-        echo "Debug: Normalized character files in directory:" && \
-        ls -la /app/characters/ && \
-        echo "Debug: Directory contents after copy:" && \
-        find /app/characters -type f -name "*.character.json" | while read f; do echo "Found: $f"; done; \
+        echo "Debug: Current files in /app/characters/:" && \
+        ls -la /app/characters/ \
     } && \
 
-    # Initial startup
-    echo "Debug: Initial startup at $(date)" && \
+    # Initial setup
+    echo "Debug: Starting container initialization at $(date)" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
-    normalize_and_copy_characters && \
+
+    # Initial file copy and setup
+    handle_character_files && \
 
     # Background update checker
     (while true; do \
@@ -128,7 +128,7 @@ CMD sh -c '\
             echo "Update triggered at $(date)" && \
             active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
             echo "Active characters from metadata: $active_characters" && \
-            normalize_and_copy_characters && \
+            handle_character_files && \
             if [ -n "$active_characters" ]; then \
                 character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
                     char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
@@ -141,7 +141,7 @@ CMD sh -c '\
                     fi; \
                 done | paste -sd "," -) && \
                 if [ -n "$character_files" ]; then \
-                    echo "Starting with active character files: $character_files" && \
+                    echo "Restarting with active character files: $character_files" && \
                     pkill -f "pnpm start" || true && \
                     pnpm start --non-interactive --characters="$character_files" & \
                 else \
