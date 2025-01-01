@@ -88,7 +88,7 @@ RUN mkdir -p characters
 
 # Add debugging to startup command
 CMD sh -c '\
-    normalize_and_copy_characters() {
+    normalize_and_copy_characters() { \
         echo "Debug: Copying and normalizing character files..." && \
         for file in $(gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json"); do \
             filename=$(basename "$file") && \
@@ -97,11 +97,11 @@ CMD sh -c '\
             gsutil cp "$file" "/app/characters/$lowercase_filename"; \
         done && \
         echo "Debug: Normalized character files in directory:" && \
-        ls -la /app/characters/
+        ls -la /app/characters/; \
     } && \
 
     echo "Debug: Starting container initialization" && \
-    echo "Verifying jq installation..." && \
+    echo "Verifying jq installation..." && \'
     if command -v jq > /dev/null 2>&1; then
         echo "jq is installed at $(command -v jq)"
     else
