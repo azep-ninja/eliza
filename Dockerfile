@@ -32,10 +32,15 @@ RUN pnpm install --frozen-lockfile || \
 
 # Build with detailed logging
 RUN set -e && \
-    PNPM_DEBUG=1 pnpm build-docker || \
-    (echo "Build failed, showing detailed logs:" && \
+    for i in 1 2 3; do \
+        echo "Build attempt $i" && \
+        PNPM_DEBUG=1 pnpm build-docker && exit 0 || \
+        echo "Build failed, retrying..." && \
+        sleep 5; \
+    done && \
+    echo "All build attempts failed" && \
     find . -name "*.log" -type f -exec cat {} + && \
-    exit 1)
+    exit 1
 
 # Prune for production
 RUN pnpm prune --prod && \
