@@ -88,7 +88,6 @@ RUN mkdir -p characters
 
 # Add debugging to startup command
 CMD sh -c '\
-    # Define all functions first
     normalize_and_copy_characters() { \
         echo "Debug: Copying and normalizing character files..." && \
         for file in $(gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json"); do \
@@ -99,38 +98,19 @@ CMD sh -c '\
         done && \
         echo "Debug: Normalized character files in directory:" && \
         ls -la /app/characters/; \
-    }; \
+    } && \
 
-    cleanup_docker() { \
-        echo "Cleaning up Docker system..." && \
-        docker system prune -af || true; \
-    }; \
-
-    # Export functions to make them available to subshells
-    export -f normalize_and_copy_characters cleanup_docker; \
-
-    # Initial cleanup
-    cleanup_docker; \
-
-    # Set up startup checks
-    echo "Debug: Starting container initialization with version $(date +%s)" && \
-    echo "Verifying jq installation..." && \
-    if command -v jq > /dev/null 2>&1; then \
-        echo "jq is installed at $(command -v jq)"; \
-    else \
-        echo "jq not found. Installing..." && \
-        apt-get update && \
-        apt-get install -y jq && \
-        apt-get clean && \
-        rm -rf /var/lib/apt/lists/*; \
-    fi && \
+    # Initial startup
+    echo "Debug: Initial startup at $(date)" && \
+    echo "Debug: Environment variables:" && \
+    env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
+    normalize_and_copy_characters && \
 
     # Background update checker
     (while true; do \
         current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger") && \
         if [ "$current_update" != "$last_update" ]; then \
             echo "Update triggered at $(date)" && \
-            cleanup_docker && \
             active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
             echo "Active characters from metadata: $active_characters" && \
             normalize_and_copy_characters && \
@@ -146,7 +126,7 @@ CMD sh -c '\
                     fi; \
                 done | paste -sd "," -) && \
                 if [ -n "$character_files" ]; then \
-                    echo "Restarting with active character files: $character_files" && \
+                    echo "Starting with active character files: $character_files" && \
                     pkill -f "pnpm start" || true && \
                     pnpm start --non-interactive --characters="$character_files" & \
                 else \
@@ -158,11 +138,7 @@ CMD sh -c '\
         sleep 30; \
     done) & \
 
-    # Initial startup
-    echo "Debug: Initial startup at $(date)" && \
-    echo "Debug: Environment variables:" && \
-    env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
-    normalize_and_copy_characters && \
+    # Initial character start
     active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     if [ -n "$active_characters" ]; then \
         character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
