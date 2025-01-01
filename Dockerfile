@@ -31,11 +31,12 @@ RUN pnpm install --frozen-lockfile || \
     echo "Dependencies installed successfully"
 
 # Build with detailed logging
-RUN pnpm build-docker || { \
-    echo "Build failed, showing detailed logs:"; \
-    find . -name "*.log" -exec cat {} \; ; \
-    exit 1; \
-}
+RUN set -e && \
+    if ! pnpm build-docker; then \
+        echo "Build failed, showing detailed logs:" && \
+        find . -name "*.log" -type f -exec cat {} + && \
+        exit 1; \
+    fi
 
 # Prune for production
 RUN pnpm prune --prod && \
