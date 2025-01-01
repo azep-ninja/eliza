@@ -20,9 +20,26 @@ COPY agent ./agent
 COPY scripts ./scripts
 
 # Install dependencies and build the project
-RUN pnpm install && \
-    pnpm build-docker && \
-    pnpm prune --prod
+# RUN pnpm install && \
+#     pnpm build-docker && \
+#     pnpm prune --prod
+# Install dependencies with fallback
+RUN pnpm install --frozen-lockfile || \
+    (echo "Frozen lockfile install failed, trying without..." && \
+    pnpm install --no-frozen-lockfile) && \
+    pnpm list && \
+    echo "Dependencies installed successfully"
+
+# Build with detailed logging
+RUN pnpm build-docker || { \
+    echo "Build failed, showing detailed logs:"; \
+    find . -name "*.log" -exec cat {} \; ; \
+    exit 1; \
+}
+
+# Prune for production
+RUN pnpm prune --prod && \
+    echo "Production pruning completed"
 
 # Final stage
 FROM node:23.3.0-slim
