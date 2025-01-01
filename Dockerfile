@@ -90,14 +90,29 @@ RUN mkdir -p characters
 CMD sh -c '\
     normalize_and_copy_characters() { \
         echo "Debug: Copying and normalizing character files..." && \
-        for file in $(gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json"); do \
+        echo "Debug: Looking for files in gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" && \
+        bucket_files=$(gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" 2>/dev/null) && \
+        if [ -z "$bucket_files" ]; then \
+            echo "Debug: No files found in bucket path" && \
+            return 1; \
+        fi && \
+        echo "Debug: Found files in bucket: $bucket_files" && \
+        for file in $bucket_files; do \
             filename=$(basename "$file") && \
             lowercase_filename=$(echo "$filename" | tr "[:upper:]" "[:lower:]") && \
-            echo "Converting $filename to $lowercase_filename" && \
-            gsutil cp "$file" "/app/characters/$lowercase_filename"; \
+            echo "Debug: Found file: $filename" && \
+            echo "Debug: Converting to: $lowercase_filename" && \
+            if gsutil cp "$file" "/app/characters/$lowercase_filename"; then \
+                echo "Debug: Copied file successfully"; \
+            else \
+                echo "Error: Failed to copy $file"; \
+                return 1; \
+            fi \
         done && \
         echo "Debug: Normalized character files in directory:" && \
-        ls -la /app/characters/; \
+        ls -la /app/characters/ && \
+        echo "Debug: Directory contents after copy:" && \
+        find /app/characters -type f -name "*.character.json" | while read f; do echo "Found: $f"; done; \
     } && \
 
     # Initial startup
