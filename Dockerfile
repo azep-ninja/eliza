@@ -32,11 +32,10 @@ RUN pnpm install --frozen-lockfile || \
 
 # Build with detailed logging
 RUN set -e && \
-    if ! pnpm build-docker; then \
-        echo "Build failed, showing detailed logs:" && \
-        find . -name "*.log" -type f -exec cat {} + && \
-        exit 1; \
-    fi
+    PNPM_DEBUG=1 pnpm build-docker || \
+    (echo "Build failed, showing detailed logs:" && \
+    find . -name "*.log" -type f -exec cat {} + && \
+    exit 1)
 
 # Prune for production
 RUN pnpm prune --prod && \
