@@ -87,8 +87,7 @@ COPY --from=builder /app/scripts ./scripts
 RUN mkdir -p characters
 
 # Add debugging to startup command
-CMD sh -c '\
-    normalize_and_copy_characters() { \
+CMD sh -c 'normalize_and_copy_characters() { \
         echo "Debug: Copying and normalizing character files..." && \
         for file in $(gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json"); do \
             filename=$(basename "$file") && \
@@ -99,17 +98,16 @@ CMD sh -c '\
         echo "Debug: Normalized character files in directory:" && \
         ls -la /app/characters/; \
     } && \
-
     echo "Debug: Starting container initialization" && \
-    echo "Verifying jq installation..." && \'
-    if command -v jq > /dev/null 2>&1; then
-        echo "jq is installed at $(command -v jq)"
-    else
+    echo "Verifying jq installation..." && \
+    if command -v jq > /dev/null 2>&1; then \
+        echo "jq is installed at $(command -v jq)"; \
+    else \
         echo "jq not found. Installing..." && \
         apt-get update && \
         apt-get install -y jq && \
         apt-get clean && \
-        rm -rf /var/lib/apt/lists/*
+        rm -rf /var/lib/apt/lists/*; \
     fi && \
     last_update="" && \
     while true; do \
@@ -142,8 +140,6 @@ CMD sh -c '\
         fi && \
         sleep 30; \
     done & \
-    \
-    # Initial startup
     echo "Debug: Initial startup at $(date)" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
