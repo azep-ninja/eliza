@@ -34,7 +34,7 @@ RUN apt-get update && \
         python3 \
         curl \
         gnupg \
-        ca-certificates && \
+        ca-certificates \
         jq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
