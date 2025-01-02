@@ -115,41 +115,57 @@ CMD sh -c '\
         if [ -n "$character_files" ]; then \
             echo "Found character files: $character_files" && \
 
+            # Get initial update state before starting any processes
+            initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0")
+            last_update="$initial_update"
+            echo "Initialized with update state: $last_update" && \
+
             # Main application loop
             while true; do \
+                # Start the main application
                 echo "Starting agent with characters..." && \
                 pnpm start --non-interactive --characters="$character_files" & \
                 main_pid=$! && \
                 echo "Agent started with PID: $main_pid" && \
 
-                # Start background check
-                last_update="" && \
+                # Use a lockfile to prevent concurrent updates
+                update_lock="/tmp/update.lock" && \
+
+                # Start background check with proper locking
                 (while true; do \
+                    # Check if main process is still running
                     if ! kill -0 $main_pid 2>/dev/null; then \
                         echo "Main process died unexpectedly" && \
+                        rm -f "$update_lock" && \
                         exit 1; \
                     fi && \
 
-                    echo "Configuration update watcher starting: $(date)" && \
+                    # Only check for updates if no lock exists
+                    if [ ! -f "$update_lock" ]; then \
+                        current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
 
-                    current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "") && \
-                    echo "Checking updates - Current: $current_update, Last: ${last_update:-none}" && \
-                    if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
-                        echo "Configuration update triggered at $(date) - Current: $current_update, Last: $last_update" && \
-                        echo "Copying updated character files..." && \
-                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
-                        echo "Copying updated knowledge files..." && \
-                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
-                        echo "Files after update:" && \
-                        ls -la /app/characters/ && \
-                        echo "Knowledge files after update:" && \
-                        ls -la /app/characters/knowledge && \
-                        echo "Gracefully stopping main process for config update" && \
-                        kill $main_pid && \
-                        wait $main_pid; \
-                        break; \
+                        if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
+                            # Create lock file
+                            touch "$update_lock" && \
+
+                            echo "Configuration update triggered at $(date) - Current: $current_update, Last: $last_update" && \
+
+                            # Perform update operations
+                            echo "Copying updated character files..." && \
+                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+                            echo "Copying updated knowledge files..." && \
+                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
+
+                            # Update state only after successful copy
+                            last_update="$current_update" && \
+
+                            # Clean shutdown
+                            echo "Gracefully stopping main process for config update" && \
+                            kill -SIGTERM $main_pid && \
+                            rm -f "$update_lock" && \
+                            break; \
+                        fi \
                     fi && \
-                    last_update=$current_update && \
                     sleep 30; \
                 done) & \
                 watch_pid=$! && \
@@ -159,16 +175,18 @@ CMD sh -c '\
                 exit_code=$?; \
                 echo "Main process exited with code: $exit_code" && \
 
-                # Kill the watcher if main process dies
+                # Cleanup
                 kill $watch_pid 2>/dev/null || true && \
+                rm -f "$update_lock" && \
 
-                # If it was a clean exit (update), continue the loop
-                # Otherwise exit the container
+                # Exit on error, continue on clean shutdown
                 if [ $exit_code -ne 0 ]; then \
-                    echo "Main process failed, exiting container" && \
+                    echo "Main process failed with code $exit_code, exiting container" && \
                     exit $exit_code; \
                 fi && \
-                echo "Clean exit, restarting application"; \
+
+                echo "Clean exit, waiting before restart..." && \
+                sleep 5; \
             done; \
         else \
             echo "No character files found, sleeping..." && \
