@@ -94,6 +94,8 @@ CMD sh -c '\
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
     echo "Debug: Checking bucket contents:" && \
     gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/" && \
+    echo "Debug: Checking bucket knowledge contents:" && \
+    gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge" && \
     echo "Debug: Copying initial character files..." && \
     gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
     echo "Debug: Files in /app/characters after copy:" && \
