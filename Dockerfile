@@ -103,24 +103,24 @@ CMD sh -c '\
                     if [ "$(basename "$file")" != "$lowercase_name" ]; then \
                         echo "Debug: Converting $(basename "$file") to $lowercase_name" && \
                         mv "$file" "/app/characters/$lowercase_name"; \
-                    fi \
-                fi \
-            done \
+                    fi; \
+                fi; \
+            done; \
         else \
             echo "Debug: No character files found in bucket"; \
         fi && \
         echo "Debug: Current files in /app/characters/:" && \
-        ls -la /app/characters/ \
+        ls -la /app/characters/; \
     } && \
-
+    \
     # Initial setup
     echo "Debug: Starting container initialization at $(date)" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
-
+    \
     # Initial file copy and setup
     handle_character_files && \
-
+    \
     # Background update checker
     (while true; do \
         current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger") && \
@@ -152,7 +152,7 @@ CMD sh -c '\
         fi && \
         sleep 30; \
     done) & \
-
+    \
     # Initial character start
     active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     if [ -n "$active_characters" ]; then \
