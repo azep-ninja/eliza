@@ -120,15 +120,19 @@ CMD sh -c '\
             echo "Agent started with PID: $main_pid" && \
 
             # Start background check only after successful agent start
+            last_update="" && \
             (while true; do \
                 if ! kill -0 $main_pid 2>/dev/null; then \
                     echo "Main process died, exiting update checker" && \
                     exit 1; \
                 fi && \
 
+                echo "Configuration update watcher starting: $(date)" && \
+
                 current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "") && \
+                echo "Checking updates - Current: $current_update, Last: ${last_update:-none}" && \
                 if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
-                    echo "Configuration update triggered at $(date)" && \
+                    echo "Configuration update triggered at $(date) - Current: $current_update, Last: $last_update" && \
                     echo "Copying updated character files..." && \
                     gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
                     echo "Copying updated knowledge files..." && \
