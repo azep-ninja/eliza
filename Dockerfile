@@ -90,6 +90,7 @@ RUN mkdir -p characters && \
 
 # Debugging and character monitoring to startup command
 CMD sh -c '\
+    # Initial setup
     echo "Debug: Starting container initialization" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
@@ -106,71 +107,52 @@ CMD sh -c '\
     echo "Debug: Files in /app/characters/knowledge after copy:" && \
     ls -la /app/characters/knowledge && \
 
-    # Background update checker
-    (while true; do \
-        current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger") && \
-        if [ "$current_update" != "$last_update" ]; then \
-            echo "Update triggered at $(date)" && \
-            active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
-            echo "Active characters from metadata: $active_characters" && \
-            echo "Copying updated character files..." && \
-            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
-            echo "Debug: Copying updated knowledge files..." && \
-            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
-            echo "Files after update:" && \
-            ls -la /app/characters/ && \
-            echo "Knowledge files after update:" && \
-            ls -la /app/characters/knowledge && \
-            if [ -n "$active_characters" ]; then \
-                character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
-                    char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
-                    found_file="/app/characters/${char_lower}.character.json" && \
-                    if [ -f "$found_file" ]; then \
-                        echo "Found active character file: $found_file" >&2 && \
-                        echo "$found_file"; \
-                    else \
-                        echo "Warning: No file found for active character: $char" >&2; \
-                    fi; \
-                done | paste -sd "," -) && \
-                if [ -n "$character_files" ]; then \
-                    echo "Character files changed, triggering container restart" && \
-                    exit 0; \
-                else \
-                    echo "Warning: No active character files found to start"; \
-                fi; \
-            fi && \
-            last_update=$current_update; \
-        fi && \
-        sleep 30; \
-    done) & \
-
     # Initial character start
     active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     if [ -n "$active_characters" ]; then \
         echo "Active characters from metadata: $active_characters" && \
         character_files=$(ls /app/characters/*.character.json 2>/dev/null || echo "") && \
-        if [ -z "$character_files" ]; then \
-            echo "Warning: No character files found in /app/characters/ despite active characters being specified" && \
-            sleep infinity; \
-        else \
+        if [ -n "$character_files" ]; then \
             echo "Found character files: $character_files" && \
-            character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
-                char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
-                found_file="/app/characters/${char_lower}.character.json" && \
-                if [ -f "$found_file" ]; then \
-                    echo "Found active character file: $found_file" >&2 && \
-                    echo "$found_file"; \
-                else \
-                    echo "Warning: No file found for active character: $char" >&2; \
-                fi; \
-            done | paste -sd "," -) && \
-            if [ -n "$character_files" ]; then \
-                echo "Starting with active character files: $character_files" && \
-                exec pnpm start --non-interactive --characters="$character_files"; \
-            else \
-                echo "No matching character files found, sleeping..." && \
-                sleep infinity; \
-            fi \
+            echo "Starting agent with characters..." && \
+            pnpm start --non-interactive --characters="$character_files" & \
+            main_pid=$! && \
+            echo "Agent started with PID: $main_pid" && \
+
+            # Start background check only after successful agent start
+            (while true; do \
+                if ! kill -0 $main_pid 2>/dev/null; then \
+                    echo "Main process died, exiting update checker" && \
+                    exit 1; \
+                fi && \
+
+                current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "") && \
+                if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
+                    echo "Configuration update triggered at $(date)" && \
+                    echo "Copying updated character files..." && \
+                    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+                    echo "Copying updated knowledge files..." && \
+                    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
+                    echo "Files after update:" && \
+                    ls -la /app/characters/ && \
+                    echo "Knowledge files after update:" && \
+                    ls -la /app/characters/knowledge && \
+                    echo "Triggering restart for configuration update" && \
+                    kill $main_pid && \
+                    exit 0; \
+                fi && \
+                last_update=$current_update && \
+                sleep 30; \
+            done) & \
+
+            # Wait for main process
+            wait $main_pid; \
+            exit_code=$?; \
+            echo "Main process exited with code: $exit_code" && \
+            exit $exit_code; \
+        else \
+            echo "No character files found, sleeping..." && \
+            sleep infinity; \
         fi; \
     else \
         echo "No active characters specified, sleeping..." && \
