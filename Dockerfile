@@ -91,21 +91,13 @@ CMD sh -c '\
     echo "Debug: Starting container initialization" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
+    echo "Debug: Checking bucket contents:" && \
+    gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/" && \
     echo "Debug: Copying initial character files..." && \
-    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
-    echo "Debug: Converting filenames to lowercase" && \
-    for file in /app/characters/*.character.json; do \
-        if [ -f "$file" ]; then \
-            lowercase_name=$(basename "$file" | tr "[:upper:]" "[:lower:]") && \
-            if [ "$(basename "$file")" != "$lowercase_name" ]; then \
-                echo "Debug: Converting $(basename "$file") to $lowercase_name" && \
-                mv "$file" "/app/characters/$lowercase_name"; \
-            fi; \
-        fi; \
-    done && \
-    echo "Debug: Files after conversion:" && \
+    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+    echo "Debug: Files in /app/characters after copy:" && \
     ls -la /app/characters/ && \
-    \
+
     # Background update checker
     (while true; do \
         current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger") && \
@@ -113,15 +105,10 @@ CMD sh -c '\
             echo "Update triggered at $(date)" && \
             active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
             echo "Active characters from metadata: $active_characters" && \
-            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
-            for file in /app/characters/*.character.json; do \
-                if [ -f "$file" ]; then \
-                    lowercase_name=$(basename "$file" | tr "[:upper:]" "[:lower:]") && \
-                    if [ "$(basename "$file")" != "$lowercase_name" ]; then \
-                        mv "$file" "/app/characters/$lowercase_name"; \
-                    fi; \
-                fi; \
-            done && \
+            echo "Copying updated character files..." && \
+            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+            echo "Files after update:" && \
+            ls -la /app/characters/ && \
             if [ -n "$active_characters" ]; then \
                 character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
                     char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
@@ -145,31 +132,36 @@ CMD sh -c '\
         fi && \
         sleep 30; \
     done) & \
-    \
+
     # Initial character start
     active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     if [ -n "$active_characters" ]; then \
-        character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
-            char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
-            found_file="/app/characters/${char_lower}.character.json" && \
-            if [ -f "$found_file" ]; then \
-                echo "Found active character file: $found_file" >&2 && \
-                echo "$found_file"; \
+        echo "Active characters from metadata: $active_characters" && \
+        character_files=$(ls /app/characters/*.character.json 2>/dev/null || echo "") && \
+        if [ -z "$character_files" ]; then \
+            echo "Warning: No character files found in /app/characters/ despite active characters being specified" && \
+            sleep infinity; \
+        else \
+            echo "Found character files: $character_files" && \
+            character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
+                char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
+                found_file="/app/characters/${char_lower}.character.json" && \
+                if [ -f "$found_file" ]; then \
+                    echo "Found active character file: $found_file" >&2 && \
+                    echo "$found_file"; \
+                else \
+                    echo "Warning: No file found for active character: $char" >&2; \
+                fi; \
+            done | paste -sd "," -) && \
+            if [ -n "$character_files" ]; then \
+                echo "Starting with active character files: $character_files" && \
+                exec pnpm start --non-interactive --characters="$character_files"; \
             else \
-                echo "Warning: No file found for active character: $char" >&2; \
-            fi; \
-        done | paste -sd "," -) && \
-        if [ -n "$character_files" ]; then \
-            echo "Starting with active character files: $character_files" && \
-            exec pnpm start --non-interactive --characters="$character_files"; \
+                echo "No matching character files found, sleeping..." && \
+                sleep infinity; \
+            fi \
         fi; \
     else \
-        character_files=$(find /app/characters -name "*.character.json" | paste -sd "," -) && \
-        if [ -n "$character_files" ]; then \
-            echo "Starting with all available character files: $character_files" && \
-            exec pnpm start --non-interactive --characters="$character_files"; \
-        else \
-            echo "ERROR: No character files found in /app/characters/" && \
-            exit 1; \
-        fi; \
+        echo "No active characters specified, sleeping..." && \
+        sleep infinity; \
     fi'
