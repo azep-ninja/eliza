@@ -53,7 +53,8 @@ RUN apt-get update && \
         curl \
         gnupg \
         ca-certificates \
-        jq && \
+        jq \
+        procps && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
