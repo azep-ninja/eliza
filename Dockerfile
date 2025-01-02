@@ -87,7 +87,7 @@ COPY --from=builder /app/scripts ./scripts
 # Create characters directory
 RUN mkdir -p characters
 
-# Add debugging to startup command
+# Debugging and character monitoring to startup command
 CMD sh -c '\
     echo "Debug: Starting container initialization" && \
     echo "Debug: Environment variables:" && \
