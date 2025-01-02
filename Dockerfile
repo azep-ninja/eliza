@@ -88,38 +88,23 @@ RUN mkdir -p characters
 
 # Add debugging to startup command
 CMD sh -c '\
-    # Define file handling function
-    handle_character_files() { \
-        echo "Debug: Checking bucket contents at gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/" && \
-        bucket_files=$(gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" 2>/dev/null) && \
-        if [ -n "$bucket_files" ]; then \
-            echo "Debug: Found files in bucket: $bucket_files" && \
-            echo "Debug: Copying files to /app/characters/" && \
-            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
-            echo "Debug: Converting filenames to lowercase" && \
-            for file in /app/characters/*.character.json; do \
-                if [ -f "$file" ]; then \
-                    lowercase_name=$(basename "$file" | tr "[:upper:]" "[:lower:]") && \
-                    if [ "$(basename "$file")" != "$lowercase_name" ]; then \
-                        echo "Debug: Converting $(basename "$file") to $lowercase_name" && \
-                        mv "$file" "/app/characters/$lowercase_name"; \
-                    fi; \
-                fi; \
-            done; \
-        else \
-            echo "Debug: No character files found in bucket"; \
-        fi && \
-        echo "Debug: Current files in /app/characters/:" && \
-        ls -la /app/characters/; \
-    } && \
-    \
-    # Initial setup
-    echo "Debug: Starting container initialization at $(date)" && \
+    echo "Debug: Starting container initialization" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
-    \
-    # Initial file copy and setup
-    handle_character_files && \
+    echo "Debug: Copying initial character files..." && \
+    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
+    echo "Debug: Converting filenames to lowercase" && \
+    for file in /app/characters/*.character.json; do \
+        if [ -f "$file" ]; then \
+            lowercase_name=$(basename "$file" | tr "[:upper:]" "[:lower:]") && \
+            if [ "$(basename "$file")" != "$lowercase_name" ]; then \
+                echo "Debug: Converting $(basename "$file") to $lowercase_name" && \
+                mv "$file" "/app/characters/$lowercase_name"; \
+            fi; \
+        fi; \
+    done && \
+    echo "Debug: Files after conversion:" && \
+    ls -la /app/characters/ && \
     \
     # Background update checker
     (while true; do \
@@ -128,7 +113,15 @@ CMD sh -c '\
             echo "Update triggered at $(date)" && \
             active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
             echo "Active characters from metadata: $active_characters" && \
-            handle_character_files && \
+            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ && \
+            for file in /app/characters/*.character.json; do \
+                if [ -f "$file" ]; then \
+                    lowercase_name=$(basename "$file" | tr "[:upper:]" "[:lower:]") && \
+                    if [ "$(basename "$file")" != "$lowercase_name" ]; then \
+                        mv "$file" "/app/characters/$lowercase_name"; \
+                    fi; \
+                fi; \
+            done && \
             if [ -n "$active_characters" ]; then \
                 character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
                     char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
