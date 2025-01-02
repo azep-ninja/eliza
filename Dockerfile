@@ -107,53 +107,69 @@ CMD sh -c '\
     echo "Debug: Files in /app/characters/knowledge after copy:" && \
     ls -la /app/characters/knowledge && \
 
-    # Initial character start
+     # Initial character start
     active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     if [ -n "$active_characters" ]; then \
         echo "Active characters from metadata: $active_characters" && \
         character_files=$(ls /app/characters/*.character.json 2>/dev/null || echo "") && \
         if [ -n "$character_files" ]; then \
             echo "Found character files: $character_files" && \
-            echo "Starting agent with characters..." && \
-            pnpm start --non-interactive --characters="$character_files" & \
-            main_pid=$! && \
-            echo "Agent started with PID: $main_pid" && \
 
-            # Start background check only after successful agent start
-            last_update="" && \
-            (while true; do \
-                if ! kill -0 $main_pid 2>/dev/null; then \
-                    echo "Main process died, exiting update checker" && \
-                    exit 1; \
+            # Main application loop
+            while true; do \
+                echo "Starting agent with characters..." && \
+                pnpm start --non-interactive --characters="$character_files" & \
+                main_pid=$! && \
+                echo "Agent started with PID: $main_pid" && \
+
+                # Start background check
+                last_update="" && \
+                (while true; do \
+                    if ! kill -0 $main_pid 2>/dev/null; then \
+                        echo "Main process died unexpectedly" && \
+                        exit 1; \
+                    fi && \
+
+                    echo "Configuration update watcher starting: $(date)" && \
+
+                    current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "") && \
+                    echo "Checking updates - Current: $current_update, Last: ${last_update:-none}" && \
+                    if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
+                        echo "Configuration update triggered at $(date) - Current: $current_update, Last: $last_update" && \
+                        echo "Copying updated character files..." && \
+                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+                        echo "Copying updated knowledge files..." && \
+                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
+                        echo "Files after update:" && \
+                        ls -la /app/characters/ && \
+                        echo "Knowledge files after update:" && \
+                        ls -la /app/characters/knowledge && \
+                        echo "Gracefully stopping main process for config update" && \
+                        kill $main_pid && \
+                        wait $main_pid; \
+                        break; \
+                    fi && \
+                    last_update=$current_update && \
+                    sleep 30; \
+                done) & \
+                watch_pid=$! && \
+
+                # Wait for main process
+                wait $main_pid; \
+                exit_code=$?; \
+                echo "Main process exited with code: $exit_code" && \
+
+                # Kill the watcher if main process dies
+                kill $watch_pid 2>/dev/null || true && \
+
+                # If it was a clean exit (update), continue the loop
+                # Otherwise exit the container
+                if [ $exit_code -ne 0 ]; then \
+                    echo "Main process failed, exiting container" && \
+                    exit $exit_code; \
                 fi && \
-
-                echo "Configuration update watcher starting: $(date)" && \
-
-                current_update=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "") && \
-                echo "Checking updates - Current: $current_update, Last: ${last_update:-none}" && \
-                if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
-                    echo "Configuration update triggered at $(date) - Current: $current_update, Last: $last_update" && \
-                    echo "Copying updated character files..." && \
-                    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
-                    echo "Copying updated knowledge files..." && \
-                    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
-                    echo "Files after update:" && \
-                    ls -la /app/characters/ && \
-                    echo "Knowledge files after update:" && \
-                    ls -la /app/characters/knowledge && \
-                    echo "Triggering restart for configuration update" && \
-                    kill $main_pid && \
-                    exit 0; \
-                fi && \
-                last_update=$current_update && \
-                sleep 30; \
-            done) & \
-
-            # Wait for main process
-            wait $main_pid; \
-            exit_code=$?; \
-            echo "Main process exited with code: $exit_code" && \
-            exit $exit_code; \
+                echo "Clean exit, restarting application"; \
+            done; \
         else \
             echo "No character files found, sleeping..." && \
             sleep infinity; \
