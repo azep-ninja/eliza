@@ -107,7 +107,7 @@ CMD sh -c '\
     echo "Debug: Files in /app/characters/knowledge after copy:" && \
     ls -la /app/characters/knowledge && \
 
-     # Initial character start
+    # Initial character start
     active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     if [ -n "$active_characters" ]; then \
         echo "Active characters from metadata: $active_characters" && \
@@ -115,16 +115,15 @@ CMD sh -c '\
         if [ -n "$character_files" ]; then \
             echo "Found character files: $character_files" && \
 
-            # Get initial update state before starting any processes
-            initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0")
-            last_update="$initial_update"
+            # Get initial update state
+            initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0") && \
+            last_update="$initial_update" && \
             echo "Initialized with update state: $last_update" && \
 
             # Main application loop
             while true; do \
-                # Start the main application
                 echo "Starting agent with characters..." && \
-                pnpm start --non-interactive --characters="$character_files" & \
+                PNPM_NO_LIFECYCLE_ERRORS=true pnpm start --non-interactive --characters="$character_files" & \
                 main_pid=$! && \
                 echo "Agent started with PID: $main_pid" && \
 
@@ -133,35 +132,26 @@ CMD sh -c '\
 
                 # Start background check with proper locking
                 (while true; do \
-                    # Check if main process is still running
                     if ! kill -0 $main_pid 2>/dev/null; then \
                         echo "Main process died unexpectedly" && \
                         rm -f "$update_lock" && \
                         exit 1; \
                     fi && \
 
-                    # Only check for updates if no lock exists
                     if [ ! -f "$update_lock" ]; then \
                         current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
 
                         if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
-                            # Create lock file
                             touch "$update_lock" && \
-
                             echo "Configuration update triggered at $(date) - Current: $current_update, Last: $last_update" && \
-
-                            # Perform update operations
                             echo "Copying updated character files..." && \
                             gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
                             echo "Copying updated knowledge files..." && \
                             gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
-
-                            # Update state only after successful copy
                             last_update="$current_update" && \
-
-                            # Clean shutdown
                             echo "Gracefully stopping main process for config update" && \
                             kill -SIGTERM $main_pid && \
+                            wait $main_pid 2>/dev/null || true && \
                             rm -f "$update_lock" && \
                             break; \
                         fi \
@@ -170,16 +160,13 @@ CMD sh -c '\
                 done) & \
                 watch_pid=$! && \
 
-                # Wait for main process
                 wait $main_pid; \
                 exit_code=$?; \
                 echo "Main process exited with code: $exit_code" && \
 
-                # Cleanup
                 kill $watch_pid 2>/dev/null || true && \
                 rm -f "$update_lock" && \
 
-                # Exit on error, continue on clean shutdown
                 if [ $exit_code -ne 0 ]; then \
                     echo "Main process failed with code $exit_code, exiting container" && \
                     exit $exit_code; \
