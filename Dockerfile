@@ -84,8 +84,9 @@ COPY --from=builder /app/agent ./agent
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/scripts ./scripts
 
-# Create characters directory
-RUN mkdir -p characters
+# Create characters and knowledge directory
+RUN mkdir -p characters && \
+    mkdir -p characters/knowledge
 
 # Debugging and character monitoring to startup command
 CMD sh -c '\
@@ -100,6 +101,10 @@ CMD sh -c '\
     gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
     echo "Debug: Files in /app/characters after copy:" && \
     ls -la /app/characters/ && \
+    echo "Debug: Copying knowledge files..." && \
+    gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
+    echo "Debug: Files in /app/characters/knowledge after copy:" && \
+    ls -la /app/characters/knowledge && \
 
     # Background update checker
     (while true; do \
@@ -110,8 +115,12 @@ CMD sh -c '\
             echo "Active characters from metadata: $active_characters" && \
             echo "Copying updated character files..." && \
             gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+            echo "Debug: Copying updated knowledge files..." && \
+            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
             echo "Files after update:" && \
             ls -la /app/characters/ && \
+            echo "Knowledge files after update:" && \
+            ls -la /app/characters/knowledge && \
             if [ -n "$active_characters" ]; then \
                 character_files=$(echo "$active_characters" | jq -r ".[]" | while read char; do \
                     char_lower=$(echo "$char" | tr "[:upper:]" "[:lower:]") && \
@@ -124,9 +133,8 @@ CMD sh -c '\
                     fi; \
                 done | paste -sd "," -) && \
                 if [ -n "$character_files" ]; then \
-                    echo "Restarting with active character files: $character_files" && \
-                    pkill -f "pnpm start" || true && \
-                    pnpm start --non-interactive --characters="$character_files" & \
+                    echo "Character files changed, triggering container restart" && \
+                    exit 0; \
                 else \
                     echo "Warning: No active character files found to start"; \
                 fi; \
