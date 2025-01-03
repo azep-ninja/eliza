@@ -108,7 +108,8 @@ CMD sh -c '\
     ls -la /app/characters/knowledge && \
 
     # Initial character start
-    active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
+    active_characters_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
+    active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
     if [ -n "$active_characters" ]; then \
         echo "Active characters from metadata: $active_characters" && \
         character_files=$(ls /app/characters/*.character.json 2>/dev/null || echo "") && \
@@ -129,6 +130,7 @@ CMD sh -c '\
 
                 # Use a lockfile to prevent concurrent updates
                 update_lock="/tmp/update.lock" && \
+                rm -f "$update_lock" && \
 
                 # Start background check with proper locking
                 (while true; do \
@@ -138,42 +140,47 @@ CMD sh -c '\
                         exit 1; \
                     fi && \
 
-                    if [ ! -f "$update_lock" ]; then \
-                        current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
+                    current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
 
-                        if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
-                            touch "$update_lock" && \
-                            echo "Configuration update triggered at $(date) - Current: $current_update, Last: $last_update" && \
-                            echo "Copying updated character files..." && \
-                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
-                            echo "Copying updated knowledge files..." && \
-                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
-                            last_update="$current_update" && \
-                            echo "Gracefully stopping main process for config update" && \
-                            kill -SIGTERM $main_pid && \
-                            wait $main_pid 2>/dev/null || true && \
-                            rm -f "$update_lock" && \
-                            break; \
-                        fi \
+                    if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
+                        touch "$update_lock" && \
+                        echo "Configuration update triggered at $(date) - Current: $current_update, Last: $last_update" && \
+                        echo "Copying updated character files..." && \
+                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+                        echo "Copying updated knowledge files..." && \
+                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
+                        echo "Files after update:" && \
+                        ls -la /app/characters/ && \
+                        echo "Knowledge files after update:" && \
+                        ls -la /app/characters/knowledge && \
+                        last_update="$current_update" && \
+                        echo "Gracefully stopping main process for config update" && \
+                        kill $main_pid && \
+                        wait $main_pid 2>/dev/null || true && \
+                        rm -f "$update_lock" && \
+                        break; \
                     fi && \
                     sleep 30; \
                 done) & \
                 watch_pid=$! && \
 
+                # Wait for main process
                 wait $main_pid; \
                 exit_code=$?; \
                 echo "Main process exited with code: $exit_code" && \
 
+                # Clean up the watcher and lock file
                 kill $watch_pid 2>/dev/null || true && \
                 rm -f "$update_lock" && \
 
+                # Exit on error, continue on clean shutdown
                 if [ $exit_code -ne 0 ]; then \
                     echo "Main process failed with code $exit_code, exiting container" && \
                     exit $exit_code; \
                 fi && \
 
                 echo "Clean exit, waiting before restart..." && \
-                sleep 5; \
+                sleep 2; \
             done; \
         else \
             echo "No character files found, sleeping..." && \
