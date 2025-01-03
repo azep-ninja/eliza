@@ -107,22 +107,33 @@ CMD sh -c '\
    echo "Debug: Files in /app/characters/knowledge after copy:" && \
    ls -la /app/characters/knowledge && \
 
-   # Initial character start
+   # Initial character start with verification
    active_characters_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
    active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
    if [ -n "$active_characters" ]; then \
        echo "Active characters from metadata: $active_characters" && \
-       character_files=$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | while read -r char; do \
-           echo -n "/app/characters/${char}.character.json"; \
-           [ "$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","; \
+
+       # Verify and process character files
+       character_files=$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | sort | while read -r char; do \
+           if [ -f "/app/characters/${char}.character.json" ]; then \
+               echo -n "/app/characters/${char}.character.json"
+               next_char=$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | sort | grep -A1 "^${char}\$" | tail -n1)
+               [ "$next_char" != "$char" ] && echo -n ","
+           else
+               echo "Error: Character file not found: ${char}" >&2
+               exit 1
+           fi
        done) && \
 
-       if [ -n "$character_files" ]; then \
-           echo "Using character files: $character_files" && \
+       if [ $? -eq 0 ] && [ -n "$character_files" ]; then \
+           echo "Verified character files: $character_files" && \
+
+           # Get initial update state
            initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0") && \
            last_update="$initial_update" && \
            echo "Initialized with update state: $last_update" && \
 
+           # Main application loop
            while true; do \
                echo "Starting agent with characters..." && \
                echo "Command: pnpm start --non-interactive --characters=\"$character_files\"" && \
@@ -130,9 +141,11 @@ CMD sh -c '\
                main_pid=$! && \
                echo "Agent started with PID: $main_pid" && \
 
+               # Use a lockfile to prevent concurrent updates
                update_lock="/tmp/update.lock" && \
                rm -f "$update_lock" && \
 
+               # Start background check with proper locking
                (while true; do \
                    if ! kill -0 $main_pid 2>/dev/null; then \
                        echo "Main process died unexpectedly" && \
@@ -153,34 +166,33 @@ CMD sh -c '\
                            echo "Copying updated knowledge files..." && \
                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
 
+                           # Re-fetch and verify active characters
                            active_characters_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
                            active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
-                           character_files=$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | while read -r char; do \
-                               echo -n "/app/characters/${char}.character.json"; \
-                               [ "$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","; \
+                           character_files=$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | sort | while read -r char; do \
+                               if [ -f "/app/characters/${char}.character.json" ]; then \
+                                   echo -n "/app/characters/${char}.character.json"
+                                   next_char=$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | sort | grep -A1 "^${char}\$" | tail -n1)
+                                   [ "$next_char" != "$char" ] && echo -n ","
+                               else
+                                   exit 1
+                               fi
                            done) && \
 
-                           last_update="$current_update" && \
-                           echo "Updated character files list: $character_files" && \
-                           echo "Gracefully stopping main process for config update" && \
-
-                           kill $main_pid && \
-                           for i in $(seq 1 30); do \
-                               if ! kill -0 $main_pid 2>/dev/null; then \
-                                   break; \
-                               fi && \
-                               echo "Waiting for process to terminate ($i/30)..." && \
-                               sleep 1; \
-                           done && \
-
-                           if kill -0 $main_pid 2>/dev/null; then \
-                               echo "Force killing process after timeout" && \
-                               kill -9 $main_pid; \
-                           fi && \
-
-                           rm -f "$update_lock" && \
-                           echo "Update completed successfully" && \
-                           break; \
+                           if [ $? -eq 0 ] && [ -n "$character_files" ]; then \
+                               last_update="$current_update" && \
+                               echo "Updated character files list: $character_files" && \
+                               echo "Gracefully stopping main process for config update" && \
+                               kill $main_pid && \
+                               wait $main_pid 2>/dev/null || true && \
+                               rm -f "$update_lock" && \
+                               echo "Update completed successfully" && \
+                               break
+                           else
+                               echo "Failed to verify updated character files" && \
+                               rm -f "$update_lock" && \
+                               continue
+                           fi
                        fi \
                    fi && \
                    sleep 30; \
@@ -203,7 +215,7 @@ CMD sh -c '\
                sleep 5; \
            done; \
        else \
-           echo "No character files found, sleeping..." && \
+           echo "Character files verification failed, sleeping..." && \
            sleep infinity; \
        fi; \
    else \
