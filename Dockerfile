@@ -112,9 +112,16 @@ CMD sh -c '\
     active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
     if [ -n "$active_characters" ]; then \
         echo "Active characters from metadata: $active_characters" && \
-        character_files=$(ls /app/characters/*.character.json 2>/dev/null || echo "") && \
+
+        # Convert JSON array to comma-separated list of character files
+        character_files=$(echo "$active_characters" | tr -d "[]\"" | tr "," "\n" | while read -r char; do \
+            echo -n "/app/characters/${char}.character.json"
+            # Add comma if not last character
+            [ "$(echo "$active_characters" | tr -d "[]\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","
+        done) && \
+
         if [ -n "$character_files" ]; then \
-            echo "Found character files: $character_files" && \
+            echo "Using character files: $character_files" && \
 
             # Get initial update state
             initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0") && \
@@ -124,6 +131,7 @@ CMD sh -c '\
             # Main application loop
             while true; do \
                 echo "Starting agent with characters..." && \
+                echo "Command: pnpm start --non-interactive --characters=\"$character_files\"" && \
                 PNPM_NO_LIFECYCLE_ERRORS=true pnpm start --non-interactive --characters="$character_files" & \
                 main_pid=$! && \
                 echo "Agent started with PID: $main_pid" && \
@@ -153,10 +161,34 @@ CMD sh -c '\
                         ls -la /app/characters/ && \
                         echo "Knowledge files after update:" && \
                         ls -la /app/characters/knowledge && \
+
+                        # Update character files list with new active characters
+                        active_characters_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
+                        active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
+                        character_files=$(echo "$active_characters" | tr -d "[]\"" | tr "," "\n" | while read -r char; do \
+                            echo -n "/app/characters/${char}.character.json"
+                            [ "$(echo "$active_characters" | tr -d "[]\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","
+                        done) && \
+                        echo "Updated character files list: $character_files" && \
+
                         last_update="$current_update" && \
                         echo "Gracefully stopping main process for config update" && \
+
+                        # Graceful shutdown with timeout
                         kill $main_pid && \
-                        wait $main_pid 2>/dev/null || true && \
+                        for i in $(seq 1 30); do \
+                            if ! kill -0 $main_pid 2>/dev/null; then \
+                                break \
+                            fi && \
+                            sleep 1 \
+                        done && \
+
+                        # Force kill if still running
+                        if kill -0 $main_pid 2>/dev/null; then \
+                            echo "Force killing process after timeout" && \
+                            kill -9 $main_pid \
+                        fi && \
+
                         rm -f "$update_lock" && \
                         break; \
                     fi && \
