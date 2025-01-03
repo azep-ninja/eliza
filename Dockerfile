@@ -89,9 +89,7 @@ RUN mkdir -p characters && \
     mkdir -p characters/knowledge
 
 # Debugging and character monitoring to startup command
-CMD sh -c '\
-    # Initial setup
-    echo "Debug: Starting container initialization" && \
+CMD sh -c 'echo "Debug: Starting container initialization" && \
     echo "Debug: Environment variables:" && \
     env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
     echo "Debug: Checking bucket contents:" && \
@@ -106,103 +104,66 @@ CMD sh -c '\
     gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
     echo "Debug: Files in /app/characters/knowledge after copy:" && \
     ls -la /app/characters/knowledge && \
-    \
     active_characters_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
     active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
-    if [ -n "$active_characters" ]; then \
+    if test -n "$active_characters"; then \
         echo "Active characters from metadata: $active_characters" && \
-        character_files=$(echo "$active_characters" | tr -d "\\"[]\\\"" | tr "," "\n" | while read -r char; do \
-            if [ -f "/app/characters/${char}.character.json" ]; then \
-                echo -n "/app/characters/${char}.character.json"
-                [ "$(echo "$active_characters" | tr -d "\\"[]\\\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","
-            else
-                echo "Error: Character file not found: ${char}" >&2
-                exit 1
-            fi
+        character_files=$(echo "$active_characters" | sed -e "s/\\[//g" -e "s/\\]//g" -e "s/\"//g" | tr "," "\n" | while read -r char; do \
+            test -f "/app/characters/${char}.character.json" && \
+            echo -n "/app/characters/${char}.character.json" && \
+            ! test "$(echo "$active_characters" | sed -e "s/\\[//g" -e "s/\\]//g" -e "s/\"//g" | tr "," "\n" | tail -n1)" = "$char" && \
+            echo -n "," \
         done) && \
-        \
-        if [ -n "$character_files" ]; then \
+        if test -n "$character_files"; then \
             echo "Verified character files: $character_files" && \
             initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0") && \
             last_update="$initial_update" && \
             echo "Initialized with update state: $last_update" && \
-            \
             while true; do \
                 echo "Starting agent with characters..." && \
                 echo "Command: pnpm start --non-interactive --characters=\"$character_files\"" && \
                 PNPM_NO_LIFECYCLE_ERRORS=true pnpm start --non-interactive --characters="$character_files" & \
                 main_pid=$! && \
                 echo "Agent started with PID: $main_pid" && \
-                \
                 update_lock="/tmp/update.lock" && \
                 rm -f "$update_lock" && \
-                \
                 (while true; do \
-                    if ! kill -0 $main_pid 2>/dev/null; then \
-                        echo "Main process died unexpectedly" && \
+                    test ! -f "$update_lock" && \
+                    current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
+                    if test -n "$current_update" && test "$current_update" != "$last_update"; then \
+                        touch "$update_lock" && \
+                        echo "Configuration update triggered at $(date)" && \
+                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
+                        new_chars=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
+                        character_files=$(echo "$new_chars" | sed -e "s/\\[//g" -e "s/\\]//g" -e "s/\"//g" | tr "," "\n" | while read -r char; do \
+                            test -f "/app/characters/${char}.character.json" && \
+                            echo -n "/app/characters/${char}.character.json" && \
+                            ! test "$(echo "$new_chars" | sed -e "s/\\[//g" -e "s/\\]//g" -e "s/\"//g" | tr "," "\n" | tail -n1)" = "$char" && \
+                            echo -n "," \
+                        done) && \
+                        last_update="$current_update" && \
+                        echo "Updated character files list: $character_files" && \
+                        kill $main_pid && \
+                        wait $main_pid 2>/dev/null || true && \
                         rm -f "$update_lock" && \
-                        exit 1; \
-                    fi && \
-                    \
-                    if [ ! -f "$update_lock" ]; then \
-                        current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
-                        \
-                        if [ -n "$current_update" ] && [ "$current_update" != "$last_update" ]; then \
-                            touch "$update_lock" && \
-                            echo "Configuration update triggered at $(date)" && \
-                            echo "Current update: $current_update, Last update: $last_update" && \
-                            \
-                            echo "Copying updated character files..." && \
-                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
-                            echo "Copying updated knowledge files..." && \
-                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
-                            \
-                            new_active_characters=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
-                            new_character_files=$(echo "$new_active_characters" | tr -d "\\"[]\\\"" | tr "," "\n" | while read -r char; do \
-                                if [ -f "/app/characters/${char}.character.json" ]; then \
-                                    echo -n "/app/characters/${char}.character.json"
-                                    [ "$(echo "$new_active_characters" | tr -d "\\"[]\\\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","
-                                else
-                                    exit 1
-                                fi
-                            done) && \
-                            \
-                            if [ -n "$new_character_files" ]; then \
-                                character_files="$new_character_files" && \
-                                last_update="$current_update" && \
-                                echo "Updated character files list: $character_files" && \
-                                echo "Gracefully stopping main process for config update" && \
-                                kill $main_pid && \
-                                wait $main_pid 2>/dev/null || true && \
-                                rm -f "$update_lock" && \
-                                break
-                            fi \
-                        fi \
-                    fi && \
-                    sleep 30; \
+                        break \
+                    fi || sleep 30 \
                 done) & \
                 watch_pid=$! && \
-                \
-                wait $main_pid; \
-                exit_code=$?; \
-                echo "Main process exited with code: $exit_code" && \
-                \
+                wait $main_pid && \
+                exit_code=$? && \
                 kill $watch_pid 2>/dev/null || true && \
                 rm -f "$update_lock" && \
-                \
-                if [ $exit_code -ne 0 ]; then \
-                    echo "Main process failed with code $exit_code, exiting container" && \
-                    exit $exit_code; \
-                fi && \
-                \
+                test $exit_code -eq 0 || exit $exit_code && \
                 echo "Clean exit, waiting before restart..." && \
-                sleep 5; \
-            done; \
+                sleep 5 \
+            done \
         else \
             echo "No character files found, sleeping..." && \
-            sleep infinity; \
-        fi; \
+            sleep infinity \
+        fi \
     else \
         echo "No active characters specified, sleeping..." && \
-        sleep infinity; \
+        sleep infinity \
     fi'
