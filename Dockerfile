@@ -112,21 +112,17 @@ CMD sh -c '\
    active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
    if [ -n "$active_characters" ]; then \
        echo "Active characters from metadata: $active_characters" && \
-       # Get initial character files list
-       character_files=$(echo "$active_characters" | tr -d "[]\"" | tr "," "\n" | while read -r char; do \
-           echo -n "/app/characters/${char}.character.json"
-           [ "$(echo "$active_characters" | tr -d "[]\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","
+       character_files=$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | while read -r char; do \
+           echo -n "/app/characters/${char}.character.json"; \
+           [ "$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","; \
        done) && \
 
        if [ -n "$character_files" ]; then \
            echo "Using character files: $character_files" && \
-
-           # Get initial update state
            initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0") && \
            last_update="$initial_update" && \
            echo "Initialized with update state: $last_update" && \
 
-           # Main application loop
            while true; do \
                echo "Starting agent with characters..." && \
                echo "Command: pnpm start --non-interactive --characters=\"$character_files\"" && \
@@ -134,11 +130,9 @@ CMD sh -c '\
                main_pid=$! && \
                echo "Agent started with PID: $main_pid" && \
 
-               # Use a lockfile to prevent concurrent updates
                update_lock="/tmp/update.lock" && \
                rm -f "$update_lock" && \
 
-               # Start background check with proper locking
                (while true; do \
                    if ! kill -0 $main_pid 2>/dev/null; then \
                        echo "Main process died unexpectedly" && \
@@ -146,7 +140,6 @@ CMD sh -c '\
                        exit 1; \
                    fi && \
 
-                   # Only check for updates if no lock exists
                    if [ ! -f "$update_lock" ]; then \
                        current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
 
@@ -155,39 +148,34 @@ CMD sh -c '\
                            echo "Configuration update triggered at $(date)" && \
                            echo "Current update: $current_update, Last update: $last_update" && \
 
-                           # Update files first
                            echo "Copying updated character files..." && \
                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
                            echo "Copying updated knowledge files..." && \
                            gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
 
-                           # Re-fetch active characters and update file list
                            active_characters_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
                            active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
-                           character_files=$(echo "$active_characters" | tr -d "[]\"" | tr "," "\n" | while read -r char; do \
-                               echo -n "/app/characters/${char}.character.json"
-                               [ "$(echo "$active_characters" | tr -d "[]\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","
+                           character_files=$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | while read -r char; do \
+                               echo -n "/app/characters/${char}.character.json"; \
+                               [ "$(echo "$active_characters" | tr -d "\\[\\]\\\"" | tr "," "\n" | tail -n1)" != "$char" ] && echo -n ","; \
                            done) && \
 
-                           # Update timestamp BEFORE killing process
                            last_update="$current_update" && \
                            echo "Updated character files list: $character_files" && \
                            echo "Gracefully stopping main process for config update" && \
 
-                           # Graceful shutdown with timeout
                            kill $main_pid && \
                            for i in $(seq 1 30); do \
                                if ! kill -0 $main_pid 2>/dev/null; then \
-                                   break \
+                                   break; \
                                fi && \
                                echo "Waiting for process to terminate ($i/30)..." && \
-                               sleep 1 \
+                               sleep 1; \
                            done && \
 
-                           # Force kill if still running
                            if kill -0 $main_pid 2>/dev/null; then \
                                echo "Force killing process after timeout" && \
-                               kill -9 $main_pid \
+                               kill -9 $main_pid; \
                            fi && \
 
                            rm -f "$update_lock" && \
@@ -199,16 +187,13 @@ CMD sh -c '\
                done) & \
                watch_pid=$! && \
 
-               # Wait for main process
                wait $main_pid; \
                exit_code=$?; \
                echo "Main process exited with code: $exit_code" && \
 
-               # Clean up the watcher and lock file
                kill $watch_pid 2>/dev/null || true && \
                rm -f "$update_lock" && \
 
-               # Exit on error, continue on clean shutdown
                if [ $exit_code -ne 0 ]; then \
                    echo "Main process failed with code $exit_code, exiting container" && \
                    exit $exit_code; \
