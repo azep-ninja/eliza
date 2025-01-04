@@ -108,41 +108,25 @@ if [ -n "$active_characters" ]; then \
         if secret_ref=$(jq -r ".settings.secrets._secretRef" "$character_file") && [ "$secret_ref" != "null" ]; then \
             echo "Processing secrets for character: $char" && \
             key_name=$(jq -r ".settings.secrets._keyName" "$character_file") && \
-            echo "Debug: Using key: $key_name" && \
-            encrypted_secrets=$(gcloud secrets versions access latest --secret="$secret_ref") && \
-            echo "Debug: Retrieved encrypted secret length: ${#encrypted_secrets}" && \
             temp_cipher=$(mktemp) && \
             temp_plain=$(mktemp) && \
-            echo "Debug: Created temp files: $temp_cipher, $temp_plain" && \
-            echo "$encrypted_secrets" > "$temp_cipher" && \
-            cipher_size=$(wc -c < "$temp_cipher") && \
-            echo "Debug: Written cipher file size: $cipher_size bytes" && \
+            gcloud secrets versions access latest --secret="$secret_ref" --out-file="$temp_cipher" && \
             if gcloud kms decrypt \
                 --key="$key_name" \
                 --location=global \
                 --ciphertext-file="$temp_cipher" \
                 --plaintext-file="$temp_plain"; then \
-                decrypted_secrets=$(cat "$temp_plain") && \
-                decrypted_size=$(wc -c < "$temp_plain") && \
-                echo "Debug: Decryption successful. Decrypted size: $decrypted_size bytes" && \
-                # Try to parse as JSON and count secrets
-                secret_count=$(echo "$decrypted_secrets" | jq -r "length" 2>/dev/null || echo "N/A") && \
-                echo "Debug: Successfully decrypted secrets for $char. Secret count: $secret_count" \
-            else \
-                echo "Error: Decryption failed for $char" \
-            fi && \
-            rm -f "$temp_cipher" "$temp_plain" && \
-            temp_file=$(mktemp) && \
-            chmod 600 "$temp_file" && \
-            if jq --arg secrets "$decrypted_secrets" \
-               ".settings.secrets = ($secrets | fromjson)" \
-               "$character_file" > "$temp_file"; then \
+                temp_file=$(mktemp) && \
+                chmod 600 "$temp_file" && \
+                jq --arg secrets "$(cat $temp_plain)" \
+                   ".settings.secrets = (\$secrets | fromjson)" \
+                   "$character_file" > "$temp_file" && \
                 mv "$temp_file" "$character_file" && \
-                echo "Debug: Successfully updated character file with decrypted secrets" \
+                echo "Successfully decrypted secrets for: $char" ; \
             else \
-                echo "Error: Failed to update character file with decrypted secrets" && \
-                rm -f "$temp_file" \
-            fi ; \
+                echo "Failed to decrypt secrets for: $char" ; \
+            fi && \
+            rm -f "$temp_cipher" "$temp_plain" ; \
         fi; \
         chars_temp="${chars_temp}${character_file}" ; \
     done && \
@@ -174,40 +158,25 @@ if [ -n "$active_characters" ]; then \
                                 if secret_ref=$(jq -r ".settings.secrets._secretRef" "$character_file") && [ "$secret_ref" != "null" ]; then \
                                     echo "Processing secrets for character update: $c" && \
                                     key_name=$(jq -r ".settings.secrets._keyName" "$character_file") && \
-                                    echo "Debug: Update - Using key: $key_name" && \
-                                    encrypted_secrets=$(gcloud secrets versions access latest --secret="$secret_ref") && \
-                                    echo "Debug: Update - Retrieved encrypted secret length: ${#encrypted_secrets}" && \
                                     temp_cipher=$(mktemp) && \
                                     temp_plain=$(mktemp) && \
-                                    echo "Debug: Update - Created temp files: $temp_cipher, $temp_plain" && \
-                                    echo "$encrypted_secrets" > "$temp_cipher" && \
-                                    cipher_size=$(wc -c < "$temp_cipher") && \
-                                    echo "Debug: Update - Written cipher file size: $cipher_size bytes" && \
+                                    gcloud secrets versions access latest --secret="$secret_ref" --out-file="$temp_cipher" && \
                                     if gcloud kms decrypt \
                                         --key="$key_name" \
                                         --location=global \
                                         --ciphertext-file="$temp_cipher" \
                                         --plaintext-file="$temp_plain"; then \
-                                        decrypted_secrets=$(cat "$temp_plain") && \
-                                        decrypted_size=$(wc -c < "$temp_plain") && \
-                                        echo "Debug: Update - Decryption successful. Decrypted size: $decrypted_size bytes" && \
-                                        secret_count=$(echo "$decrypted_secrets" | jq -r "length" 2>/dev/null || echo "N/A") && \
-                                        echo "Debug: Update - Successfully decrypted secrets for $c. Secret count: $secret_count" \
-                                    else \
-                                        echo "Error: Update - Decryption failed for $c" \
-                                    fi && \
-                                    rm -f "$temp_cipher" "$temp_plain" && \
-                                    temp_file=$(mktemp) && \
-                                    chmod 600 "$temp_file" && \
-                                    if jq --arg secrets "$decrypted_secrets" \
-                                       ".settings.secrets = ($secrets | fromjson)" \
-                                       "$character_file" > "$temp_file"; then \
+                                        temp_file=$(mktemp) && \
+                                        chmod 600 "$temp_file" && \
+                                        jq --arg secrets "$(cat $temp_plain)" \
+                                           ".settings.secrets = (\$secrets | fromjson)" \
+                                           "$character_file" > "$temp_file" && \
                                         mv "$temp_file" "$character_file" && \
-                                        echo "Debug: Update - Successfully updated character file with decrypted secrets" \
+                                        echo "Successfully decrypted secrets for update: $c" ; \
                                     else \
-                                        echo "Error: Update - Failed to update character file with decrypted secrets" && \
-                                        rm -f "$temp_file" \
-                                    fi ; \
+                                        echo "Failed to decrypt secrets for update: $c" ; \
+                                    fi && \
+                                    rm -f "$temp_cipher" "$temp_plain" ; \
                                 fi; \
                                 new_chars_temp="${new_chars_temp}${character_file}" ; \
                             fi; \
