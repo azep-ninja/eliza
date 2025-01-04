@@ -89,95 +89,105 @@ RUN mkdir -p characters && \
     mkdir -p characters/knowledge
 
 # Debugging and character monitoring to startup command
-CMD sh -c '\
-   echo "Debug: Starting container initialization" && \
-   env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
-   gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/" && \
-   gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge" && \
-   gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
-   ls -la /app/characters/ && \
-   gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
-   ls -la /app/characters/knowledge && \
-   active_characters_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
-   active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
-   if [ -n "$active_characters" ]; then \
-       echo "Active characters from metadata: $active_characters" && \
-       chars_temp="" && \
-       for char in $(echo "$active_characters" | sed "s/[][\"]//g" | tr "," " "); do \
-           [ -n "$chars_temp" ] && chars_temp="${chars_temp}," ; \
-           character_file="/app/characters/${char}.character.json" && \
-           # Decrypt secrets for this character
-           secret_ref=$(jq -r ".settings.secrets._secretRef" "$character_file") && \
-           key_name=$(jq -r ".settings.secrets._keyName" "$character_file") && \
-           encrypted_secrets=$(gcloud secrets versions access latest --secret="$secret_ref") && \
-           decrypted_secrets=$(echo "$encrypted_secrets" | gcloud kms decrypt \
-               --key="$key_name" \
-               --ciphertext-file=- \
-               --plaintext-file=- \
-               --location=global) && \
-           # Update character file with decrypted secrets
-           temp_file=$(mktemp) && \
-           chmod 600 "$temp_file" && \
-           jq --arg secrets "$decrypted_secrets" \
-              ".settings.secrets = ($secrets | fromjson)" \
-              "$character_file" > "$temp_file" && \
-           mv "$temp_file" "$character_file" && \
-           chars_temp="${chars_temp}${character_file}" \
-       done && \
-       character_files="$chars_temp" && \
-       if [ -n "$character_files" ]; then \
-           echo "Using character files: $character_files" && \
-           initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0") && \
-           last_update="$initial_update" && \
-           while true; do \
-               echo "Starting agent with characters..." && \
-               PNPM_NO_LIFECYCLE_ERRORS=true pnpm start --non-interactive --characters="$character_files" & \
-               main_pid=$! && \
-               update_lock="/tmp/update.lock" && \
-               rm -f "$update_lock" && \
-               while kill -0 $main_pid 2>/dev/null; do \
-                   if [ ! -f "$update_lock" ]; then \
-                       current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
-                       if [ "$current_update" != "$last_update" ]; then \
-                           touch "$update_lock" && \
-                           echo "Configuration update started at $(date)" && \
-                           gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
-                           gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
-                           for char in $(echo "$active_characters" | sed "s/[][\"]//g" | tr "," " "); do \
-                               character_file="/app/characters/${char}.character.json" && \
-                               secret_ref=$(jq -r ".settings.secrets._secretRef" "$character_file") && \
-                               key_name=$(jq -r ".settings.secrets._keyName" "$character_file") && \
-                               encrypted_secrets=$(gcloud secrets versions access latest --secret="$secret_ref") && \
-                               decrypted_secrets=$(echo "$encrypted_secrets" | gcloud kms decrypt \
-                                   --key="$key_name" \
-                                   --ciphertext-file=- \
-                                   --plaintext-file=- \
-                                   --location=global) && \
-                               temp_file=$(mktemp) && \
-                               chmod 600 "$temp_file" && \
-                               jq --arg secrets "$decrypted_secrets" \
-                                  ".settings.secrets = ($secrets | fromjson)" \
-                                  "$character_file" > "$temp_file" && \
-                               mv "$temp_file" "$character_file" \
-                           done && \
-                           last_update="$current_update" && \
-                           echo "Updated character files with decrypted secrets" && \
-                           kill $main_pid && \
-                           rm -f "$update_lock" && \
-                           break \
-                       fi \
-                   fi && \
-                   sleep 30 \
-               done && \
-               wait $main_pid; \
-               exit_code=$? && \
-               if [ $exit_code -ne 0 ]; then exit $exit_code; fi && \
-               echo "Clean exit, waiting before restart..." && \
-               sleep 2 \
-           done \
-       else \
-           sleep infinity \
-       fi \
-   else \
-       sleep infinity \
-   fi'
+CMD sh -c 'echo "Debug: Starting container initialization" && \
+env | grep -E "AGENTS_BUCKET_NAME|DEPLOYMENT_ID" && \
+gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/" && \
+gsutil ls "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge" && \
+gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+ls -la /app/characters/ && \
+gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
+ls -la /app/characters/knowledge && \
+active_characters_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
+active_characters=$(echo "$active_characters_raw" | sed "s/;/,/g") && \
+if [ -n "$active_characters" ]; then \
+    echo "Active characters from metadata: $active_characters" && \
+    chars_temp="" && \
+    for char in $(echo "$active_characters" | sed "s/[][\"]//g" | tr "," " "); do \
+        [ -n "$chars_temp" ] && chars_temp="${chars_temp}," ; \
+        character_file="/app/characters/${char}.character.json" && \
+        if secret_ref=$(jq -r ".settings.secrets._secretRef" "$character_file") && [ "$secret_ref" != "null" ]; then \
+            echo "Processing secrets for character: $char" && \
+            key_name=$(jq -r ".settings.secrets._keyName" "$character_file") && \
+            encrypted_secrets=$(gcloud secrets versions access latest --secret="$secret_ref") && \
+            decrypted_secrets=$(echo "$encrypted_secrets" | gcloud kms decrypt \
+                --key="$key_name" \
+                --ciphertext-file=- \
+                --plaintext-file=- \
+                --location=global) && \
+            temp_file=$(mktemp) && \
+            chmod 600 "$temp_file" && \
+            jq --arg secrets "$decrypted_secrets" \
+               ".settings.secrets = ($secrets | fromjson)" \
+               "$character_file" > "$temp_file" && \
+            mv "$temp_file" "$character_file" ; \
+        fi; \
+        chars_temp="${chars_temp}${character_file}" ; \
+    done && \
+    character_files="$chars_temp" && \
+    if [ -n "$character_files" ]; then \
+        echo "Using character files: $character_files" && \
+        initial_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "0") && \
+        last_update="$initial_update" && \
+        while true; do \
+            echo "Starting agent with characters..." && \
+            PNPM_NO_LIFECYCLE_ERRORS=true pnpm start --non-interactive --characters="$character_files" & \
+            main_pid=$! && \
+            update_lock="/tmp/update.lock" && \
+            rm -f "$update_lock" && \
+            while kill -0 $main_pid 2>/dev/null; do \
+                if [ ! -f "$update_lock" ]; then \
+                    current_update=$(curl -sf -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/character-update-trigger" || echo "$last_update") && \
+                    if [ "$current_update" != "$last_update" ]; then \
+                        touch "$update_lock" && \
+                        echo "Configuration update started at $(date)" && \
+                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/*.character.json" /app/characters/ || true && \
+                        gsutil -m cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/knowledge/*" /app/characters/knowledge || true && \
+                        new_chars_raw=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/active-characters") && \
+                        new_chars_temp="" && \
+                        for c in $(echo "$new_chars_raw" | sed "s/[][\"]//g;s/;/,/g" | tr "," " "); do \
+                            if [ -f "/app/characters/${c}.character.json" ]; then \
+                                [ -n "$new_chars_temp" ] && new_chars_temp="${new_chars_temp}," ; \
+                                character_file="/app/characters/${c}.character.json" && \
+                                if secret_ref=$(jq -r ".settings.secrets._secretRef" "$character_file") && [ "$secret_ref" != "null" ]; then \
+                                    echo "Processing secrets for character update: $c" && \
+                                    key_name=$(jq -r ".settings.secrets._keyName" "$character_file") && \
+                                    encrypted_secrets=$(gcloud secrets versions access latest --secret="$secret_ref") && \
+                                    decrypted_secrets=$(echo "$encrypted_secrets" | gcloud kms decrypt \
+                                        --key="$key_name" \
+                                        --ciphertext-file=- \
+                                        --plaintext-file=- \
+                                        --location=global) && \
+                                    temp_file=$(mktemp) && \
+                                    chmod 600 "$temp_file" && \
+                                    jq --arg secrets "$decrypted_secrets" \
+                                       ".settings.secrets = ($secrets | fromjson)" \
+                                       "$character_file" > "$temp_file" && \
+                                    mv "$temp_file" "$character_file" ; \
+                                fi; \
+                                new_chars_temp="${new_chars_temp}${character_file}" ; \
+                            fi; \
+                        done && \
+                        if [ -n "$new_chars_temp" ]; then \
+                            character_files="$new_chars_temp" && \
+                            last_update="$current_update" && \
+                            echo "Updated character list: $character_files" && \
+                            kill $main_pid && \
+                            break; \
+                        fi && \
+                        rm -f "$update_lock"; \
+                    fi; \
+                fi && \
+                sleep 30; \
+            done && \
+            wait $main_pid; \
+            exit_code=$? && \
+            if [ $exit_code -ne 0 ]; then exit $exit_code; fi && \
+            echo "Clean exit, waiting before restart..." && \
+            sleep 2; \
+        done; \
+    else \
+        sleep infinity; \
+    fi; \
+else \
+    sleep infinity; \
+fi'
