@@ -109,11 +109,16 @@ if [ -n "$active_characters" ]; then \
             echo "Processing secrets for character: $char" && \
             key_name=$(jq -r ".settings.secrets._keyName" "$character_file") && \
             encrypted_secrets=$(gcloud secrets versions access latest --secret="$secret_ref") && \
-            decrypted_secrets=$(echo "$encrypted_secrets" | gcloud kms decrypt \
+            temp_cipher=$(mktemp) && \
+            temp_plain=$(mktemp) && \
+            echo "$encrypted_secrets" > "$temp_cipher" && \
+            gcloud kms decrypt \
                 --key="$key_name" \
-                --ciphertext-file=- \
-                --plaintext-file=- \
-                --location=global) && \
+                --location=global \
+                --ciphertext-file="$temp_cipher" \
+                --plaintext-file="$temp_plain" && \
+            decrypted_secrets=$(cat "$temp_plain") && \
+            rm -f "$temp_cipher" "$temp_plain" && \
             temp_file=$(mktemp) && \
             chmod 600 "$temp_file" && \
             jq --arg secrets "$decrypted_secrets" \
@@ -152,11 +157,16 @@ if [ -n "$active_characters" ]; then \
                                     echo "Processing secrets for character update: $c" && \
                                     key_name=$(jq -r ".settings.secrets._keyName" "$character_file") && \
                                     encrypted_secrets=$(gcloud secrets versions access latest --secret="$secret_ref") && \
-                                    decrypted_secrets=$(echo "$encrypted_secrets" | gcloud kms decrypt \
+                                    temp_cipher=$(mktemp) && \
+                                    temp_plain=$(mktemp) && \
+                                    echo "$encrypted_secrets" > "$temp_cipher" && \
+                                    gcloud kms decrypt \
                                         --key="$key_name" \
-                                        --ciphertext-file=- \
-                                        --plaintext-file=- \
-                                        --location=global) && \
+                                        --location=global \
+                                        --ciphertext-file="$temp_cipher" \
+                                        --plaintext-file="$temp_plain" && \
+                                    decrypted_secrets=$(cat "$temp_plain") && \
+                                    rm -f "$temp_cipher" "$temp_plain" && \
                                     temp_file=$(mktemp) && \
                                     chmod 600 "$temp_file" && \
                                     jq --arg secrets "$decrypted_secrets" \
