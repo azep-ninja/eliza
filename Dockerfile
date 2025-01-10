@@ -233,15 +233,15 @@ CMD sh -c 'echo "Debug: Starting container initialization" && \
                                 used_space=$(df -B1 --output=used /app/agent/data | tail -1) && \
                                 avail_space=$(df -B1 --output=avail /app/agent/data | tail -1) && \
                                 format_size() { \
-                                    local bytes=$1; \
-                                    if [ $bytes -lt 1000 ]; then \
+                                    local bytes="$1"; \
+                                    if [ "$bytes" -lt 1000 ]; then \
                                         echo "${bytes} B"; \
-                                    elif [ $bytes -lt 1000000 ]; then \
-                                        echo "$(( (bytes + 500) / 1000 )) KB"; \
-                                    elif [ $bytes -lt 1000000000 ]; then \
-                                        echo "$(( (bytes + 500000) / 1000000 )) MB"; \
+                                    elif [ "$bytes" -lt 1000000 ]; then \
+                                        echo "$((($bytes + 500) / 1000)) KB"; \
+                                    elif [ "$bytes" -lt 1000000000 ]; then \
+                                        echo "$((($bytes + 500000) / 1000000)) MB"; \
                                     else \
-                                        echo "$(( (bytes + 500000000) / 1000000000 )) GB"; \
+                                        echo "$((($bytes + 500000000) / 1000000000)) GB"; \
                                     fi; \
                                 } && \
                                 echo "{\
@@ -252,10 +252,10 @@ CMD sh -c 'echo "Debug: Starting container initialization" && \
                                     \"availableSpace\": $avail_space\
                                 },\
                                 \"readable\": {\
-                                    \"dbSize\": \"$(format_size $db_size)\",\
-                                    \"totalSpace\": \"$(format_size $total_space)\",\
-                                    \"usedSpace\": \"$(format_size $used_space)\",\
-                                    \"availableSpace\": \"$(format_size $avail_space)\"\
+                                    \"dbSize\": \"$(format_size "$db_size")\",\
+                                    \"totalSpace\": \"$(format_size "$total_space")\",\
+                                    \"usedSpace\": \"$(format_size "$used_space")\",\
+                                    \"availableSpace\": \"$(format_size "$avail_space")\"\
                                 },\
                                 \"timestamp\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"\
                                 }" > /tmp/storage-info.json && \
