@@ -94,6 +94,6 @@ RUN mkdir -p characters && \
 
 # CMD that fetches and runs the entrypoint script
 CMD sh -c 'echo "Fetching latest container entrypoint script..." && \
-    gsutil cp "gs://${AGENTS_BUCKET_NAME}/${DEPLOYMENT_ID}/_project-files/container-entrypoint.sh" /app/container-entrypoint.sh && \
+    gsutil cp "gs://${AGENTS_BUCKET_NAME}/_project-files/container-entrypoint.sh" /app/container-entrypoint.sh && \
     chmod +x /app/container-entrypoint.sh && \
     /app/container-entrypoint.sh'
