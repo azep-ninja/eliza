@@ -27,15 +27,19 @@ RUN pnpm install --frozen-lockfile || \
     echo "Dependencies installed successfully"
 
 # Build with detailed logging
-RUN set -e && \
+RUN set -ex && \
     for i in 1 2 3; do \
         echo "Build attempt $i" && \
-        PNPM_DEBUG=1 pnpm build-docker && exit 0 || \
+        (PNPM_DEBUG=1 DEBUG=* TURBO_LOG_VERBOSITY=verbose pnpm build-docker 2>&1 | tee build_attempt_${i}.log) && exit 0 || \
+        (echo "=== Build Failure Details for Attempt ${i} ===" && \
+        cat build_attempt_${i}.log && \
+        echo "=== End of Build Failure Details ===" && \
         echo "Build failed, retrying..." && \
-        sleep 5; \
+        sleep 5) \
     done && \
     echo "All build attempts failed" && \
-    find . -name "*.log" -type f -exec cat {} + && \
+    echo "=== All Build Logs ===" && \
+    cat build_attempt_*.log && \
     exit 1
 
 # Prune for production
