@@ -202,22 +202,7 @@ CMD sh -c 'echo "Debug: Starting container initialization" && \
                         if [ "$current_backup" != "$last_backup" ]; then \
                             echo "Database backup triggered at $(date)" && \
                             if [ -f "/app/agent/data/db.sqlite" ]; then \
-                                node -e '\
-                                const Database = require("better-sqlite3");\
-                                const fs = require("fs");\
-                                const { execSync } = require("child_process");\
-                                const db = new Database("/app/agent/data/db.sqlite");\
-                                const backupPath = "/tmp/backup.sqlite";\
-                                db.backup(backupPath)\
-                                  .then(() => {\
-                                    console.log("Backup created successfully");\
-                                    execSync(`gsutil cp ${backupPath} gs://${process.env.AGENTS_BUCKET_NAME}/${process.env.DEPLOYMENT_ID}/backups/db-${Date.now()}.sqlite`);\
-                                    fs.unlinkSync(backupPath);\
-                                    console.log("Backup uploaded and cleaned up");\
-                                  })\
-                                  .catch(console.error)\
-                                  .finally(() => db.close());\
-                                ' && \
+                                node -e 'const Database = require("better-sqlite3"); const fs = require("fs"); const { execSync } = require("child_process"); const db = new Database("/app/agent/data/db.sqlite"); const backupPath = "/tmp/backup.sqlite"; db.backup(backupPath).then(() => { console.log("Backup created successfully"); execSync(`gsutil cp ${backupPath} gs://${process.env.AGENTS_BUCKET_NAME}/${process.env.DEPLOYMENT_ID}/backups/db-${Date.now()}.sqlite`); fs.unlinkSync(backupPath); console.log("Backup uploaded and cleaned up"); }).catch(console.error).finally(() => db.close());' && \
                                 echo "Database backup completed successfully" && \
                                 last_backup="$current_backup" ; \
                             else \
@@ -237,11 +222,11 @@ CMD sh -c 'echo "Debug: Starting container initialization" && \
                                     if [ "$bytes" -lt 1000 ]; then \
                                         echo "${bytes} B"; \
                                     elif [ "$bytes" -lt 1000000 ]; then \
-                                        echo "$((($bytes + 500) / 1000)) KB"; \
+                                        echo "$(( (bytes + 500) / 1000 )) KB"; \
                                     elif [ "$bytes" -lt 1000000000 ]; then \
-                                        echo "$((($bytes + 500000) / 1000000)) MB"; \
+                                        echo "$(( (bytes + 500000) / 1000000 )) MB"; \
                                     else \
-                                        echo "$((($bytes + 500000000) / 1000000000)) GB"; \
+                                        echo "$(( (bytes + 500000000) / 1000000000 )) GB"; \
                                     fi; \
                                 } && \
                                 echo "{\
