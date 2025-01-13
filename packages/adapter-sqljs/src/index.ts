@@ -13,9 +13,7 @@ import {
     type Goal,
     type Memory,
     type Relationship,
-    type UUID,
-    RAGKnowledgeItem,
-    elizaLogger
+    type UUID
 } from "@elizaos/core";
 import { v4 } from "uuid";
 import { sqliteTables } from "./sqliteTables.ts";

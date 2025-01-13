@@ -19,7 +19,6 @@ import { generateText } from "./generation.ts";
 import { formatGoalsAsString, getGoals } from "./goals.ts";
 import { elizaLogger } from "./index.ts";
 import knowledge from "./knowledge.ts";
-import { RAGKnowledgeManager } from "./ragknowledge.ts";
 import { MemoryManager } from "./memory.ts";
 import { formatActors, formatMessages, getActorDetails } from "./messages.ts";
 import { parseJsonArrayFromText } from "./parsing.ts";
@@ -34,7 +33,6 @@ import {
     IAgentRuntime,
     ICacheManager,
     IDatabaseAdapter,
-    IRAGKnowledgeManager,
     IMemoryManager,
     IRAGKnowledgeManager,
     IVerifiableInferenceAdapter,
@@ -55,8 +53,6 @@ import {
     type Memory,
 } from "./types.ts";
 import { stringToUuid } from "./uuid.ts";
-import { readFile } from 'fs/promises';
-import { join } from 'path';
 
 /**
  * Represents the runtime environment for an agent, handling message processing,
@@ -486,12 +482,9 @@ export class AgentRuntime implements IAgentRuntime {
      * then chunks the content into fragments, embeds each fragment, and creates fragment memories.
      * @param knowledge An array of knowledge items containing id, path, and content.
      */
-
-    // Original
-    private async processCharacterKnowledge(items: (string | { path: string; shared?: boolean })[]) {
+    private async processCharacterKnowledge(items: string[]) {
         for (const item of items) {
-            const content = item.toString();
-            const knowledgeId = stringToUuid(content);
+            const knowledgeId = stringToUuid(item);
             const existingDocument =
                 await this.documentsManager.getMemoryById(knowledgeId);
             if (existingDocument) {
@@ -502,13 +495,13 @@ export class AgentRuntime implements IAgentRuntime {
                 "Processing knowledge for ",
                 this.character.name,
                 " - ",
-                content.slice(0, 100)
+                item.slice(0, 100)
             );
 
             await knowledge.set(this, {
                 id: knowledgeId,
                 content: {
-                    text: content,
+                    text: item,
                 },
             });
         }
@@ -1040,6 +1033,7 @@ export class AgentRuntime implements IAgentRuntime {
                 ?.name || this.character.name;
 
         let allAttachments = message.content.attachments || [];
+
         if (recentMessagesData && Array.isArray(recentMessagesData)) {
             const lastMessageWithAttachment = recentMessagesData.find(
                 (msg) =>
