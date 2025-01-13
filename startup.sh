@@ -1,124 +1,55 @@
 #!/bin/bash
+set -e
+set -x
 
-# Enable error checking and debugging
-set -e  # Exit on any error
-set -x  # Print each command before executing
-
-# Log startup for debugging
 echo "Starting initialization script..."
 
-# Check if directory exists first and show current permissions
-echo "Checking current state..."
-ls -la /mnt || true
-ls -la /mnt/stateful_partition || true
-
-# Try creating base directory first
-echo "Creating base directory..."
-if ! sudo mkdir -p /mnt/stateful_partition; then
-    echo "Failed to create /mnt/stateful_partition"
-    # Try to identify the issue
-    df -h
-    mount | grep /mnt
-    ls -la /mnt
-    exit 1
-fi
-
-# Try alternative locations if stateful_partition isn't working
-if [ ! -d "/mnt/stateful_partition" ]; then
-    echo "Using alternative directory /var/lib/qi-agents"
-    sudo mkdir -p /var/lib/qi-agents || {
-        echo "Failed to create alternative directory"
-        exit 1
-    }
-    AGENT_DATA_DIR="/var/lib/qi-agents"
-else
-    AGENT_DATA_DIR="/mnt/stateful_partition/qi-agents"
-    # Create qi-agents directory
-    sudo mkdir -p "$AGENT_DATA_DIR" || {
-        echo "Failed to create qi-agents directory"
-        exit 1
-    }
-fi
-
 # Create data directory
+AGENT_DATA_DIR="/var/lib/qi-agents"
 echo "Creating data directory in $AGENT_DATA_DIR..."
 sudo mkdir -p "$AGENT_DATA_DIR/data" || {
     echo "Failed to create data directory"
     exit 1
 }
 
-# Set permissions with verbose output
+# Set permissions
 echo "Setting directory permissions..."
-sudo chmod -Rv 777 "$AGENT_DATA_DIR" || {
+sudo chmod -R 777 "$AGENT_DATA_DIR" || {
     echo "Failed to set permissions"
     exit 1
 }
 
-# Verify directory structure and permissions
-echo "Verifying directory structure..."
-ls -la "$AGENT_DATA_DIR"
-ls -la "$AGENT_DATA_DIR/data"
-
-# Pull latest image with verification
-echo "Pulling latest image..."
-if ! docker pull us-central1-docker.pkg.dev/${PROJECT_ID}/${FULL_NAME}:${version}; then
-    echo "Failed to pull image"
-    exit 1
-fi
-
-# Get secrets from Secret Manager
-echo "Fetching secrets..."
-AGENTS_BUCKET_NAME=$(gcloud secrets versions access latest --secret="agents-bucket-name") || {
-    echo "Failed to fetch agents-bucket-name secret"
-    exit 1
+# Configure Docker daemon
+echo "Configuring Docker daemon..."
+DOCKER_CONFIG_DIR="/etc/docker"
+sudo mkdir -p "$DOCKER_CONFIG_DIR"
+cat << 'EOF' | sudo tee "$DOCKER_CONFIG_DIR/daemon.json"
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "storage-driver": "overlay2",
+  "storage-opts": [
+    "overlay2.size=25G"
+  ],
+  "live-restore": true,
+  "max-concurrent-downloads": 10,
+  "max-concurrent-uploads": 5
 }
-SMALL_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="small-google-model") || {
-    echo "Failed to fetch small-google-model secret"
-    exit 1
-}
-MEDIUM_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="medium-google-model") || {
-    echo "Failed to fetch medium-google-model secret"
-    exit 1
-}
-GOOGLE_GENERATIVE_AI_API_KEY=$(gcloud secrets versions access latest --secret="google-generative-ai-key") || {
-    echo "Failed to fetch google-generative-ai-key secret"
-    exit 1
-}
+EOF
 
-# Debug existing environment variables
-echo "Debug: Checking existing environment variables:"
-echo "AGENTS_BUCKET_NAME from environment: ${AGENTS_BUCKET_NAME}"
-echo "CHARACTER_FILE from environment: ${CHARACTER_FILE}"
+# Get deployment ID from metadata
+DEPLOYMENT_ID=$(curl -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/name")
+echo "Deployment ID: ${DEPLOYMENT_ID}"
 
-# Run container with persistent storage and restart policy
-echo "Starting container with environment variables..."
-docker run -d \
-    --name ${FULL_NAME} \
-    --restart=always \
-    -v "$AGENT_DATA_DIR/data":/app/agent/data \
-    -e AGENTS_BUCKET_NAME="${AGENTS_BUCKET_NAME}" \
-    -e CHARACTER_FILE="${CHARACTER_FILE}" \
-    -e SMALL_GOOGLE_MODEL="${SMALL_GOOGLE_MODEL}" \
-    -e MEDIUM_GOOGLE_MODEL="${MEDIUM_GOOGLE_MODEL}" \
-    -e GOOGLE_GENERATIVE_AI_API_KEY="${GOOGLE_GENERATIVE_AI_API_KEY}" \
-    -e PORT="8080" \
-    -e SERVER_PORT="8080" \
-    us-central1-docker.pkg.dev/${PROJECT_ID}/${FULL_NAME}:${version}
+# Configure gcloud auth
+echo "Configuring gcloud auth..."
+gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
 
-# Verify container is running and check logs
-echo "Checking container status and logs..."
-sleep 5  # Give container a moment to start
-if ! docker ps | grep ${FULL_NAME}; then
-    echo "Container failed to start. Checking logs:"
-    docker logs ${FULL_NAME}
-    exit 1
-fi
+# Set up periodic cleanup using cron
+echo "Setting up periodic image cleanup..."
+(crontab -l 2>/dev/null; echo "0 */12 * * * docker image prune -af --filter 'until=48h'") | crontab -
 
-# Show container logs and verify environment variables
-echo "Container environment variables:"
-docker exec ${FULL_NAME} env | grep -E 'AGENTS_BUCKET_NAME|CHARACTER_FILE'
-
-echo "Initial container logs:"
-docker logs ${FULL_NAME}
-
-echo "Startup script completed successfully"
+echo "Startup completed successfully"

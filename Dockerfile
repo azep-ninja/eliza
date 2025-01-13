@@ -11,7 +11,6 @@ RUN npm install -g pnpm@9.4.0 && \
 # Set Python 3 as the default python
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# Set the working directory
 WORKDIR /app
 
 # Copy all workspace files first
@@ -20,13 +19,51 @@ COPY packages ./packages
 COPY agent ./agent
 COPY scripts ./scripts
 
-# Install dependencies and build the project
-RUN pnpm install && \
-    pnpm build-docker && \
-    pnpm prune --prod
+# Install dependencies with fallback
+RUN pnpm install --frozen-lockfile || \
+    (echo "Frozen lockfile install failed, trying without..." && \
+    pnpm install --no-frozen-lockfile) && \
+    pnpm list && \
+    echo "Dependencies installed successfully"
 
-# Create a new stage for the final image
+# Build with detailed logging
+RUN set -ex && \
+    for i in 1 2 3; do \
+        echo "Build attempt $i" && \
+        (PNPM_DEBUG=1 DEBUG=* TURBO_LOG_VERBOSITY=verbose pnpm build-docker 2>&1 | tee build_attempt_${i}.log) && exit 0 || \
+        (echo "=== Build Failure Details for Attempt ${i} ===" && \
+        cat build_attempt_${i}.log && \
+        echo "=== End of Build Failure Details ===" && \
+        echo "Build failed, retrying..." && \
+        sleep 5) \
+    done && \
+    echo "All build attempts failed" && \
+    echo "=== All Build Logs ===" && \
+    cat build_attempt_*.log && \
+    exit 1
+
+# Prune for production
+RUN pnpm prune --prod && \
+    echo "Production pruning completed"
+
+# Final stage
 FROM node:23.3.0-slim
+
+# Install runtime dependencies and certificates first
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        python3 \
+        curl \
+        gnupg \
+        ca-certificates \
+        jq \
+        procps && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install pnpm
+RUN npm install -g pnpm@9.4.0
 
 # Install runtime dependencies and Google Cloud SDK
 RUN npm install -g pnpm@9.4.0 && \
@@ -41,7 +78,7 @@ RUN npm install -g pnpm@9.4.0 && \
 
 WORKDIR /app
 
-# Copy built artifacts and production dependencies from the builder stage
+# Copy only necessary files from builder
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/.npmrc ./
@@ -51,29 +88,12 @@ COPY --from=builder /app/agent ./agent
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/scripts ./scripts
 
-# Create characters directory
-RUN mkdir -p characters
+# Create characters and knowledge directory
+RUN mkdir -p characters && \
+    mkdir -p characters/knowledge
 
-# Add debugging and error handling to startup command
-CMD sh -c '\
-    echo "Debug: Starting container" && \
-    echo "Debug: AGENTS_BUCKET_NAME=${AGENTS_BUCKET_NAME}" && \
-    echo "Debug: CHARACTER_FILE=${CHARACTER_FILE}" && \
-    echo "Debug: Full GCS path=gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE}" && \
-    if [ -z "${AGENTS_BUCKET_NAME}" ]; then \
-        echo "Error: AGENTS_BUCKET_NAME is empty" && exit 1; \
-    fi && \
-    if [ -z "${CHARACTER_FILE}" ]; then \
-        echo "Error: CHARACTER_FILE is empty" && exit 1; \
-    fi && \
-    echo "Debug: Attempting to copy character file..." && \
-    gsutil cp gs://${AGENTS_BUCKET_NAME}/${CHARACTER_FILE} characters/${CHARACTER_FILE} && \
-    # Get secrets directly when starting the application
-    export SMALL_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="small-google-model") && \
-    export MEDIUM_GOOGLE_MODEL=$(gcloud secrets versions access latest --secret="medium-google-model") && \
-    export GOOGLE_GENERATIVE_AI_API_KEY=$(gcloud secrets versions access latest --secret="google-generative-ai-key") && \
-    echo "Debug: Environment variables:" && \
-    echo "SMALL_GOOGLE_MODEL=${SMALL_GOOGLE_MODEL}" && \
-    echo "MEDIUM_GOOGLE_MODEL=${MEDIUM_GOOGLE_MODEL}" && \
-    echo "Debug: Starting application..." && \
-    pnpm start --non-interactive --characters=characters/${CHARACTER_FILE}'
+# CMD that fetches and runs the entrypoint script
+CMD sh -c 'echo "Fetching latest container entrypoint script..." && \
+    gsutil cp "gs://${AGENTS_BUCKET_NAME}/_project-files/container-entrypoint.sh" /app/container-entrypoint.sh && \
+    chmod +x /app/container-entrypoint.sh && \
+    /app/container-entrypoint.sh'
