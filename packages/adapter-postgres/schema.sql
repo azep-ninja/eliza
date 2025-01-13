@@ -9,6 +9,7 @@
 -- DROP TABLE IF EXISTS memories CASCADE;
 -- DROP TABLE IF EXISTS rooms CASCADE;
 -- DROP TABLE IF EXISTS accounts CASCADE;
+-- DROP TABLE IF EXISTS knowledge CASCADE;
 
 
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -24,6 +25,9 @@ BEGIN
     -- Then check for Ollama
     ELSIF current_setting('app.use_ollama_embedding', TRUE) = 'true' THEN
         RETURN 1024;  -- Ollama mxbai-embed-large dimension
+    -- Then check for GAIANET
+    ELSIF current_setting('app.use_gaianet_embedding', TRUE) = 'true' THEN
+        RETURN 768;  -- Gaianet nomic-embed dimension
     ELSE
         RETURN 384;   -- BGE/Other embedding dimension
     END IF;
@@ -144,7 +148,7 @@ BEGIN
             "originalId" UUID REFERENCES knowledge("id"),
             "chunkIndex" INTEGER,
             "isShared" BOOLEAN DEFAULT FALSE,
-            CHECK((isShared = true AND "agentId" IS NULL) OR (isShared = false AND "agentId" IS NOT NULL))
+            CHECK(("isShared" = true AND "agentId" IS NULL) OR ("isShared" = false AND "agentId" IS NOT NULL))
         )', vector_dim);
 END $$;
 

@@ -1,6 +1,11 @@
 import { Update, Message, Chat } from "@telegraf/types";
 import { Context, Telegraf } from "telegraf";
-import { composeContext, elizaLogger, ServiceType, composeRandomUser } from "@elizaos/core";
+import {
+    composeContext,
+    elizaLogger,
+    ServiceType,
+    composeRandomUser,
+} from "@elizaos/core";
 import { getEmbeddingZeroVector } from "@elizaos/core";
 import {
     Content,
@@ -27,7 +32,6 @@ import {
 import fs from "fs";
 
 const MAX_MESSAGE_LENGTH = 4096; // Telegram's max message length
-
 interface MessageContext {
     content: string;
     timestamp: number;
@@ -625,7 +629,7 @@ export class MessageManager {
 
         // Check if team member has direct interest first
         if (
-            this.runtime.character.clientConfig?.discord?.isPartOfTeam &&
+            this.runtime.character.clientConfig?.telegram?.isPartOfTeam &&
             !this._isTeamLeader() &&
             this._isRelevantToTeamMember(messageText, chatId)
         ) {
@@ -796,8 +800,11 @@ export class MessageManager {
     ): Promise<Message.TextMessage[]> {
         if (content.attachments && content.attachments.length > 0) {
             content.attachments.map(async (attachment: Media) => {
-                if (attachment.contentType.startsWith("image")) {
-                    this.sendImage(ctx, attachment.url, attachment.description);
+                if (attachment.contentType === "image/gif") {
+                    // Handle GIFs specifically
+                    await this.sendAnimation(ctx, attachment.url, attachment.description);
+                } else if (attachment.contentType.startsWith("image")) {
+                    await this.sendImage(ctx, attachment.url, attachment.description);
                 }
             });
         } else {
@@ -858,6 +865,42 @@ export class MessageManager {
             elizaLogger.info(`Image sent successfully: ${imagePath}`);
         } catch (error) {
             elizaLogger.error("Error sending image:", error);
+        }
+    }
+
+    private async sendAnimation(
+        ctx: Context,
+        animationPath: string,
+        caption?: string
+    ): Promise<void> {
+        try {
+            if (/^(http|https):\/\//.test(animationPath)) {
+                // Handle HTTP URLs
+                await ctx.telegram.sendAnimation(ctx.chat.id, animationPath, {
+                    caption,
+                });
+            } else {
+                // Handle local file paths
+                if (!fs.existsSync(animationPath)) {
+                    throw new Error(`File not found: ${animationPath}`);
+                }
+
+                const fileStream = fs.createReadStream(animationPath);
+
+                await ctx.telegram.sendAnimation(
+                    ctx.chat.id,
+                    {
+                        source: fileStream,
+                    },
+                    {
+                        caption,
+                    }
+                );
+            }
+
+            elizaLogger.info(`Animation sent successfully: ${animationPath}`);
+        } catch (error) {
+            elizaLogger.error("Error sending animation:", error);
         }
     }
 
@@ -1168,6 +1211,53 @@ export class MessageManager {
             // Decide whether to respond
             const shouldRespond = await this._shouldRespond(message, state);
 
+            // Send response in chunks
+            const callback: HandlerCallback = async (content: Content) => {
+                const sentMessages = await this.sendMessageInChunks(
+                    ctx,
+                    content,
+                    message.message_id
+                );
+                if (sentMessages) {
+                    const memories: Memory[] = [];
+
+                    // Create memories for each sent message
+                    for (let i = 0; i < sentMessages.length; i++) {
+                        const sentMessage = sentMessages[i];
+                        const isLastMessage = i === sentMessages.length - 1;
+
+                        const memory: Memory = {
+                            id: stringToUuid(
+                                sentMessage.message_id.toString() +
+                                    "-" +
+                                    this.runtime.agentId
+                            ),
+                            agentId,
+                            userId: agentId,
+                            roomId,
+                            content: {
+                                ...content,
+                                text: sentMessage.text,
+                                inReplyTo: messageId,
+                            },
+                            createdAt: sentMessage.date * 1000,
+                            embedding: getEmbeddingZeroVector(),
+                        };
+
+                        // Set action to CONTINUE for all messages except the last one
+                        // For the last message, use the original action from the response content
+                        memory.content.action = !isLastMessage
+                            ? "CONTINUE"
+                            : content.action;
+
+                        await this.runtime.messageManager.createMemory(memory);
+                        memories.push(memory);
+                    }
+
+                    return memories;
+                }
+            };
+
             if (shouldRespond) {
                 // Generate response
                 const context = composeContext({
@@ -1188,55 +1278,6 @@ export class MessageManager {
 
                 if (!responseContent || !responseContent.text) return;
 
-                // Send response in chunks
-                const callback: HandlerCallback = async (content: Content) => {
-                    const sentMessages = await this.sendMessageInChunks(
-                        ctx,
-                        content,
-                        message.message_id
-                    );
-                    if (sentMessages) {
-                        const memories: Memory[] = [];
-
-                        // Create memories for each sent message
-                        for (let i = 0; i < sentMessages.length; i++) {
-                            const sentMessage = sentMessages[i];
-                            const isLastMessage = i === sentMessages.length - 1;
-
-                            const memory: Memory = {
-                                id: stringToUuid(
-                                    sentMessage.message_id.toString() +
-                                        "-" +
-                                        this.runtime.agentId
-                                ),
-                                agentId,
-                                userId: agentId,
-                                roomId,
-                                content: {
-                                    ...content,
-                                    text: sentMessage.text,
-                                    inReplyTo: messageId,
-                                },
-                                createdAt: sentMessage.date * 1000,
-                                embedding: getEmbeddingZeroVector(),
-                            };
-
-                            // Set action to CONTINUE for all messages except the last one
-                            // For the last message, use the original action from the response content
-                            memory.content.action = !isLastMessage
-                                ? "CONTINUE"
-                                : content.action;
-
-                            await this.runtime.messageManager.createMemory(
-                                memory
-                            );
-                            memories.push(memory);
-                        }
-
-                        return memories;
-                    }
-                };
-
                 // Execute callback to send messages and log memories
                 const responseMessages = await callback(responseContent);
 
@@ -1252,7 +1293,7 @@ export class MessageManager {
                 );
             }
 
-            await this.runtime.evaluate(memory, state, shouldRespond);
+            await this.runtime.evaluate(memory, state, shouldRespond, callback);
         } catch (error) {
             elizaLogger.error("❌ Error handling message:", error);
             elizaLogger.error("Error sending message:", error);

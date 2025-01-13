@@ -32,3 +32,4 @@ export const bootstrapPlugin: Plugin = {
     // providers: [boredomProvider, timeProvider, factsProvider],
     providers: [timeProvider, factsProvider],
 };
+export default bootstrapPlugin;

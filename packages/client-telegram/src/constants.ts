@@ -13,11 +13,11 @@ export const TIMING_CONSTANTS = {
     TEAM_MEMBER_DELAY_MIN: 1000, // 1 second
     TEAM_MEMBER_DELAY_MAX: 3000, // 3 seconds
     LEADER_DELAY_MIN: 2000, // 2 seconds
-    LEADER_DELAY_MAX: 4000  // 4 seconds
+    LEADER_DELAY_MAX: 4000, // 4 seconds
 } as const;
 
 export const RESPONSE_CHANCES = {
-    AFTER_LEADER: 0.5,  // 50% chance to respond after leader
+    AFTER_LEADER: 0.5, // 50% chance to respond after leader
 } as const;
 
 export const TEAM_COORDINATION = {

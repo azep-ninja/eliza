@@ -108,6 +108,22 @@ CREATE TABLE IF NOT EXISTS "knowledge" (
     CHECK((isShared = 1 AND agentId IS NULL) OR (isShared = 0 AND agentId IS NOT NULL))
 );
 
+-- Table: knowledge
+CREATE TABLE IF NOT EXISTS "knowledge" (
+    "id" TEXT PRIMARY KEY,
+    "agentId" TEXT,
+    "content" TEXT NOT NULL CHECK(json_valid("content")),
+    "embedding" BLOB,
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "isMain" INTEGER DEFAULT 0,
+    "originalId" TEXT,
+    "chunkIndex" INTEGER,
+    "isShared" INTEGER DEFAULT 0,
+    FOREIGN KEY ("agentId") REFERENCES "accounts"("id"),
+    FOREIGN KEY ("originalId") REFERENCES "knowledge"("id"),
+    CHECK((isShared = 1 AND agentId IS NULL) OR (isShared = 0 AND agentId IS NOT NULL))
+);
+
 -- Index: relationships_id_key
 CREATE UNIQUE INDEX IF NOT EXISTS "relationships_id_key" ON "relationships" ("id");
 
