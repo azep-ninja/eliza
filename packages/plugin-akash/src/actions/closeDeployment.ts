@@ -1,5 +1,5 @@
-import { Action, elizaLogger } from "@elizaos/core";
-import { IAgentRuntime, Memory, State, HandlerCallback, Content, ActionExample } from "@elizaos/core";
+import { type Action, elizaLogger } from "@elizaos/core";
+import type { IAgentRuntime, Memory, State, HandlerCallback, Content, ActionExample } from "@elizaos/core";
 import { DirectSecp256k1HdWallet, Registry } from "@cosmjs/proto-signing";
 import { SigningStargateClient } from "@cosmjs/stargate";
 import { getAkashTypeRegistry, getTypeUrl } from "@akashnetwork/akashjs/build/stargate";
@@ -7,8 +7,8 @@ import { MsgCloseDeployment } from "@akashnetwork/akash-api/akash/deployment/v1b
 import { validateAkashConfig } from "../environment";
 import { fetchDeployments } from "./getDeploymentApi";
 import { AkashError, AkashErrorCode } from "../error/error";
-import { getCertificatePath } from "../utils/paths";
-import { inspectRuntime, isPluginLoaded } from "../runtime_inspect";
+// import { getCertificatePath } from "../utils/paths";
+import { isPluginLoaded } from "../runtime_inspect";
 
 interface CloseDeploymentContent extends Content {
     dseq?: string;
@@ -16,7 +16,7 @@ interface CloseDeploymentContent extends Content {
 }
 
 // Certificate file path
-const CERTIFICATE_PATH = getCertificatePath(import.meta.url);
+// const CERTIFICATE_PATH = getCertificatePath(import.meta.url);
 
 // Initialize wallet and client
 async function initializeClient(runtime: IAgentRuntime) {
@@ -312,7 +312,7 @@ export const closeDeploymentAction: Action = {
         runtime: IAgentRuntime,
         message: Memory,
         state: State | undefined,
-        options: { [key: string]: unknown } = {},
+        _options: { [key: string]: unknown } = {},
         callback?: HandlerCallback
     ): Promise<boolean> => {
         const actionId = Date.now().toString();

@@ -1,12 +1,12 @@
 import { getAssociatedTokenAddress } from "@solana/spl-token";
 import {
-    BlockhashWithExpiryBlockHeight,
+    type BlockhashWithExpiryBlockHeight,
     Connection,
-    Keypair,
+    type Keypair,
     PublicKey,
-    RpcResponseAndContext,
-    SimulatedTransactionResponse,
-    TokenAmount,
+    type RpcResponseAndContext,
+    type SimulatedTransactionResponse,
+    type TokenAmount,
     VersionedTransaction,
 } from "@solana/web3.js";
 import { settings, elizaLogger } from "@elizaos/core";
@@ -82,7 +82,7 @@ export const executeSwap = async (
                 lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
                 blockhash: latestBlockhash.blockhash,
             },
-            "finalized"
+            "confirmed"
         );
         if (confirmation.value.err) {
             elizaLogger.log("Confirmation error", confirmation.value.err);

@@ -1,11 +1,11 @@
 import settings from "./settings.ts";
 import {
-    EmbeddingModelSettings,
-    ImageModelSettings,
+    type EmbeddingModelSettings,
+    type ImageModelSettings,
     ModelClass,
     ModelProviderName,
-    Models,
-    ModelSettings,
+    type Models,
+    type ModelSettings,
 } from "./types.ts";
 
 export const models: Models = {
@@ -276,7 +276,7 @@ export const models: Models = {
                 temperature: 0.7,
             },
             [ModelClass.MEDIUM]: {
-                name: "meta-llama-3.1-8b-instruct",
+                name: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo-128K",
                 stop: [],
                 maxInputTokens: 128000,
                 maxOutputTokens: 8192,
@@ -375,6 +375,46 @@ export const models: Models = {
                     settings.EMBEDDING_GOOGLE_MODEL ||
                     settings.GOOGLE_MODEL ||
                     "text-embedding-004",
+            },
+        },
+    },
+    [ModelProviderName.MISTRAL]: {
+        model: {
+            [ModelClass.SMALL]: {
+                name:
+                    settings.SMALL_MISTRAL_MODEL ||
+                    settings.MISTRAL_MODEL ||
+                    "mistral-small-latest",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                frequency_penalty: 0.4,
+                presence_penalty: 0.4,
+                temperature: 0.7,
+            },
+            [ModelClass.MEDIUM]: {
+                name:
+                    settings.MEDIUM_MISTRAL_MODEL ||
+                    settings.MISTRAL_MODEL ||
+                    "mistral-large-latest",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                frequency_penalty: 0.4,
+                presence_penalty: 0.4,
+                temperature: 0.7,
+            },
+            [ModelClass.LARGE]: {
+                name:
+                    settings.LARGE_MISTRAL_MODEL ||
+                    settings.MISTRAL_MODEL ||
+                    "mistral-large-latest",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                frequency_penalty: 0.4,
+                presence_penalty: 0.4,
+                temperature: 0.7,
             },
         },
     },
@@ -892,11 +932,38 @@ export const models: Models = {
         },
     },
     [ModelProviderName.LIVEPEER]: {
-        // livepeer endpoint is handled from the sdk
+        endpoint: settings.LIVEPEER_GATEWAY_URL,
         model: {
+            [ModelClass.SMALL]: {
+                name:
+                    settings.SMALL_LIVEPEER_MODEL ||
+                    "meta-llama/Meta-Llama-3.1-8B-Instruct",
+                stop: [],
+                maxInputTokens: 8000,
+                maxOutputTokens: 8192,
+                temperature: 0,
+            },
+            [ModelClass.MEDIUM]: {
+                name:
+                    settings.MEDIUM_LIVEPEER_MODEL ||
+                    "meta-llama/Meta-Llama-3.1-8B-Instruct",
+                stop: [],
+                maxInputTokens: 8000,
+                maxOutputTokens: 8192,
+                temperature: 0,
+            },
+            [ModelClass.LARGE]: {
+                name:
+                    settings.LARGE_LIVEPEER_MODEL ||
+                    "meta-llama/Meta-Llama-3.1-8B-Instruct",
+                stop: [],
+                maxInputTokens: 8000,
+                maxOutputTokens: 8192,
+                temperature: 0,
+            },
             [ModelClass.IMAGE]: {
                 name:
-                    settings.LIVEPEER_IMAGE_MODEL || "ByteDance/SDXL-Lightning",
+                    settings.IMAGE_LIVEPEER_MODEL || "ByteDance/SDXL-Lightning",
             },
         },
     },
@@ -908,21 +975,85 @@ export const models: Models = {
                 stop: [],
                 maxInputTokens: 128000,
                 maxOutputTokens: 8192,
-                temperature: 0.6,
+                temperature: 0,
             },
             [ModelClass.MEDIUM]: {
                 name: settings.MEDIUM_INFERA_MODEL || "mistral-nemo:latest",
                 stop: [],
                 maxInputTokens: 128000,
                 maxOutputTokens: 8192,
-                temperature: 0.6,
+                temperature: 0,
             },
             [ModelClass.LARGE]: {
                 name: settings.LARGE_INFERA_MODEL || "mistral-small:latest",
                 stop: [],
                 maxInputTokens: 128000,
                 maxOutputTokens: 8192,
-                temperature: 0.6,
+                temperature: 0,
+            },
+        },
+    },
+    [ModelProviderName.DEEPSEEK]: {
+        endpoint: settings.DEEPSEEK_API_URL || "https://api.deepseek.com",
+        model: {
+            [ModelClass.SMALL]: {
+                name: settings.SMALL_DEEPSEEK_MODEL || "deepseek-chat",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                frequency_penalty: 0.0,
+                presence_penalty: 0.0,
+                temperature: 0.7,
+            },
+            [ModelClass.MEDIUM]: {
+                name: settings.MEDIUM_DEEPSEEK_MODEL || "deepseek-chat",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                frequency_penalty: 0.0,
+                presence_penalty: 0.0,
+                temperature: 0.7,
+            },
+            [ModelClass.LARGE]: {
+                name: settings.LARGE_DEEPSEEK_MODEL || "deepseek-chat",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                frequency_penalty: 0.0,
+                presence_penalty: 0.0,
+                temperature: 0.7,
+            },
+        },
+    },
+    [ModelProviderName.ATOMA]: {
+        endpoint: settings.ATOMA_API_URL || "https://api.atoma.network/v1",
+        model: {
+            [ModelClass.SMALL]: {
+                name:
+                    settings.SMALL_ATOMA_MODEL ||
+                    "meta-llama/Llama-3.3-70B-Instruct",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                temperature: 0.7,
+            },
+            [ModelClass.MEDIUM]: {
+                name:
+                    settings.MEDIUM_ATOMA_MODEL ||
+                    "meta-llama/Llama-3.3-70B-Instruct",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                temperature: 0.7,
+            },
+            [ModelClass.LARGE]: {
+                name:
+                    settings.LARGE_ATOMA_MODEL ||
+                    "meta-llama/Llama-3.3-70B-Instruct",
+                stop: [],
+                maxInputTokens: 128000,
+                maxOutputTokens: 8192,
+                temperature: 0.7,
             },
         },
     },

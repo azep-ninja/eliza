@@ -1,4 +1,4 @@
-import {
+import type {
     IAgentRuntime,
     ICacheManager,
     Memory,
@@ -33,7 +33,7 @@ type SuiNetwork = "mainnet" | "testnet" | "devnet" | "localnet";
 
 export class WalletProvider {
     private cache: NodeCache;
-    private cacheKey: string = "sui/wallet";
+    private cacheKey = "sui/wallet";
 
     constructor(
         private suiClient: SuiClient,
@@ -181,7 +181,7 @@ export class WalletProvider {
                 }
             );
             const prices: Prices = {
-                sui: { usd: suiPriceData.pair.priceUsd },
+                sui: { usd: (1 / suiPriceData.pair.priceNative).toString() },
             };
             this.setCachedData(cacheKey, prices);
             return prices;

@@ -1,13 +1,13 @@
-import { Action, elizaLogger } from "@elizaos/core";
-import { IAgentRuntime, Memory, State, HandlerCallback, Content, ActionExample } from "@elizaos/core";
+import { type Action, elizaLogger } from "@elizaos/core";
+import type { IAgentRuntime, Memory, State, HandlerCallback, Content, ActionExample } from "@elizaos/core";
 import { SDL } from "@akashnetwork/akashjs/build/sdl";
 import { validateAkashConfig } from "../environment";
 import { AkashError, AkashErrorCode } from "../error/error";
 import * as fs from 'fs';
 import * as path from 'path';
 import yaml from 'js-yaml';
-import { getAkashTypeRegistry } from "@akashnetwork/akashjs/build/stargate";
-import { getCertificatePath, getDefaultSDLPath } from "../utils/paths";
+// import { getAkashTypeRegistry } from "@akashnetwork/akashjs/build/stargate";
+import { getDefaultSDLPath } from "../utils/paths";
 
 interface GetManifestContent extends Content {
     sdl?: string;
@@ -90,7 +90,7 @@ const loadSDLFromFile = (filePath: string): string => {
     }
 };
 
-const validateSDL = (sdlContent: string, validationLevel: string = "strict"): boolean => {
+const validateSDL = (sdlContent: string, validationLevel = "strict"): boolean => {
     try {
         // First try to parse as YAML
         const parsed = yaml.load(sdlContent);
@@ -121,10 +121,10 @@ const validateSDL = (sdlContent: string, validationLevel: string = "strict"): bo
         // });
         return true;
     } catch (error) {
-        // elizaLogger.error("SDL validation failed", {
-        //     error: error instanceof Error ? error.message : String(error),
-        //     validationLevel
-        // });
+        elizaLogger.error("SDL validation failed", {
+            error: error instanceof Error ? error.message : String(error),
+            validationLevel
+        });
         return false;
     }
 };
@@ -186,7 +186,7 @@ export const getManifestAction: Action = {
         runtime: IAgentRuntime,
         message: Memory,
         state: State | undefined,
-        options: { [key: string]: unknown; } = {},
+        _options: { [key: string]: unknown; } = {},
         callback?: HandlerCallback
     ): Promise<boolean> => {
         const actionId = Date.now().toString();

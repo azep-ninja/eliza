@@ -1,5 +1,5 @@
-import { Action, elizaLogger } from "@elizaos/core";
-import { IAgentRuntime, Memory, State, HandlerCallback, Content, ActionExample } from "@elizaos/core";
+import { type Action, elizaLogger } from "@elizaos/core";
+import type { IAgentRuntime, Memory, State, HandlerCallback, Content, ActionExample } from "@elizaos/core";
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { QueryDeploymentRequest, QueryClientImpl as DeploymentQueryClient } from "@akashnetwork/akash-api/akash/deployment/v1beta3";
 import { getRpc } from "@akashnetwork/akashjs/build/rpc";
@@ -144,7 +144,7 @@ export const getDeploymentStatusAction: Action = {
         runtime: IAgentRuntime,
         message: Memory,
         state: State | undefined,
-        options: { [key: string]: unknown } = {},
+        _options: { [key: string]: unknown } = {},
         callback?: HandlerCallback
     ): Promise<boolean> => {
         const actionId = Date.now().toString();

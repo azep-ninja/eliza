@@ -1,6 +1,6 @@
 import {
     elizaLogger,
-    IAgentRuntime,
+    type IAgentRuntime,
     ServiceType,
     ModelProviderName,
 } from "@elizaos/core";
@@ -8,15 +8,17 @@ import { Service } from "@elizaos/core";
 import fs from "fs";
 import https from "https";
 import {
-    GbnfJsonSchema,
+    type GbnfJsonSchema,
     getLlama,
-    Llama,
-    LlamaContext,
-    LlamaContextSequence,
-    LlamaContextSequenceRepeatPenalty,
+    type Llama,
+    LlamaChatSession,
+    type LlamaChatSessionRepeatPenalty,
+    type LlamaContext,
+    type LlamaContextSequence,
+    type LlamaContextSequenceRepeatPenalty,
     LlamaJsonSchemaGrammar,
-    LlamaModel,
-    Token,
+    type LlamaModel,
+    type Token,
 } from "node-llama-cpp";
 import path from "path";
 import si from "systeminformation";
@@ -172,8 +174,8 @@ export class LlamaService extends Service {
     private ollamaModel: string | undefined;
 
     private messageQueue: QueuedMessage[] = [];
-    private isProcessing: boolean = false;
-    private modelInitialized: boolean = false;
+    private isProcessing = false;
+    private modelInitialized = false;
     private runtime: IAgentRuntime | undefined;
 
     static serviceType: ServiceType = ServiceType.TEXT_GENERATION;
@@ -307,7 +309,7 @@ export class LlamaService extends Service {
                                 return;
                             }
 
-                            totalSize = parseInt(
+                            totalSize = Number.parseInt(
                                 response.headers["content-length"] || "0",
                                 10
                             );
@@ -549,49 +551,27 @@ export class LlamaService extends Service {
             throw new Error("Model not initialized.");
         }
 
-        const tokens = this.model!.tokenize(context);
+        const session = new LlamaChatSession({
+            contextSequence: this.sequence
+        });
 
-        // tokenize the words to punish
         const wordsToPunishTokens = wordsToPunish
-            .map((word) => this.model!.tokenize(word))
-            .flat();
+            .flatMap((word) => this.model!.tokenize(word));
 
-        const repeatPenalty: LlamaContextSequenceRepeatPenalty = {
-            punishTokens: () => wordsToPunishTokens,
+        const repeatPenalty: LlamaChatSessionRepeatPenalty = {
+            punishTokensFilter: () => wordsToPunishTokens,
             penalty: 1.2,
             frequencyPenalty: frequency_penalty,
             presencePenalty: presence_penalty,
         };
 
-        const responseTokens: Token[] = [];
-
-        for await (const token of this.sequence.evaluate(tokens, {
+        const response = await session.prompt(context, {
+            onTextChunk(chunk) {                // stream the response to the console as it's being generated
+                process.stdout.write(chunk);
+            },
             temperature: Number(temperature),
-            repeatPenalty: repeatPenalty,
-            grammarEvaluationState: useGrammar ? this.grammar : undefined,
-            yieldEogToken: false,
-        })) {
-            const current = this.model.detokenize([...responseTokens, token]);
-            if ([...stop].some((s) => current.includes(s))) {
-                elizaLogger.info("Stop sequence found");
-                break;
-            }
-
-            responseTokens.push(token);
-            process.stdout.write(this.model!.detokenize([token]));
-            if (useGrammar) {
-                if (current.replaceAll("\n", "").includes("}```")) {
-                    elizaLogger.info("JSON block found");
-                    break;
-                }
-            }
-            if (responseTokens.length > max_tokens) {
-                elizaLogger.info("Max tokens reached");
-                break;
-            }
-        }
-
-        const response = this.model!.detokenize(responseTokens);
+            repeatPenalty: repeatPenalty
+        });
 
         if (!response) {
             throw new Error("Response is undefined");
@@ -757,8 +737,7 @@ export class LlamaService extends Service {
 
         // tokenize the words to punish
         const wordsToPunishTokens = wordsToPunish
-            .map((word) => this.model!.tokenize(word))
-            .flat();
+            .flatMap((word) => this.model!.tokenize(word));
 
         const repeatPenalty: LlamaContextSequenceRepeatPenalty = {
             punishTokens: () => wordsToPunishTokens,
