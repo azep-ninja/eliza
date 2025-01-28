@@ -102,6 +102,8 @@ WORKDIR /app
 # Copy only necessary files from builder
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/eslint.config.mjs ./
+COPY --from=builder /app/.eslintrc.json ./
 COPY --from=builder /app/.npmrc ./
 COPY --from=builder /app/turbo.json ./
 COPY --from=builder /app/node_modules ./node_modules
