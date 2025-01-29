@@ -86,6 +86,7 @@ COPY --from=builder /app/turbo.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/agent ./agent
 COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/patches ./patches
 COPY --from=builder /app/scripts ./scripts
 
 # Create characters and knowledge directory
