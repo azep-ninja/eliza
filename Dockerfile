@@ -16,6 +16,7 @@ WORKDIR /app
 # Copy all workspace files first
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
 COPY packages ./packages
+COPY patches ./patches
 COPY agent ./agent
 COPY scripts ./scripts
 
