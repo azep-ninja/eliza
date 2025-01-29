@@ -18,7 +18,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
 COPY packages ./packages
 COPY patches ./patches
 COPY agent ./agent
+COPY client ./client
 COPY scripts ./scripts
+COPY lerna.json ./
 
 # Install dependencies with fallback
 RUN pnpm install --frozen-lockfile || \
@@ -86,6 +88,8 @@ COPY --from=builder /app/.npmrc ./
 COPY --from=builder /app/turbo.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/agent ./agent
+COPY --from=builder /app/client ./client
+COPY --from=builder /app/lerna.json ./
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/patches ./patches
 COPY --from=builder /app/scripts ./scripts
