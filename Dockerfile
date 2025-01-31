@@ -4,7 +4,7 @@ FROM node:23.3.0-slim AS builder
 # Install pnpm globally and install necessary build tools
 RUN npm install -g pnpm@9.4.0 && \
     apt-get update && \
-    apt-get install -y git python3 make g++ && \
+    apt-get install -y git python3 make g++ curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -13,24 +13,24 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 
 WORKDIR /app
 
-# Copy all workspace files first
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
-COPY packages ./packages
-COPY patches ./patches
-COPY agent ./agent
-COPY client ./client
-COPY scripts ./scripts
-COPY lerna.json ./
+# Copy all files
+COPY . .
 
-# Install dependencies with fallback
+# Install dependencies with improved error handling and debugging
 RUN pnpm install --frozen-lockfile || \
     (echo "Frozen lockfile install failed, trying without..." && \
     pnpm install --no-frozen-lockfile) && \
     pnpm list && \
-    echo "Dependencies installed successfully"
+    echo "Dependencies installed successfully" && \
+    # Debug workspace packages
+    pnpm list -r | grep "@elizaos" || echo "No workspace packages found!"
 
-# Build with detailed logging
+# Build with detailed logging and ensure workspace packages are built
 RUN set -ex && \
+    echo "Starting build process..." && \
+    # Build all workspace packages first
+    pnpm -r run build && \
+    # Then run the build-docker command as in your original Dockerfile
     for i in 1 2 3; do \
         echo "Build attempt $i" && \
         (PNPM_DEBUG=1 DEBUG=* TURBO_LOG_VERBOSITY=verbose pnpm build-docker 2>&1 | tee build_attempt_${i}.log) && exit 0 || \
@@ -40,35 +40,46 @@ RUN set -ex && \
         echo "Build failed, retrying..." && \
         sleep 5) \
     done && \
-    echo "All build attempts failed" && \
-    echo "=== All Build Logs ===" && \
-    cat build_attempt_*.log && \
-    exit 1
-
-# Prune for production
-RUN pnpm prune --prod && \
-    echo "Production pruning completed"
+    # Only prune after successful build
+    pnpm prune --prod && \
+    echo "Production pruning completed" && \
+    # Verify packages still exist after prune
+    ls -la /app/agent/node_modules/@elizaos || echo "No @elizaos modules found after prune!"
 
 # Final stage
 FROM node:23.3.0-slim
 
 # Install runtime dependencies and certificates first
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
         git \
         python3 \
+        python3-pip \
         curl \
+        node-gyp \
+        ffmpeg \
+        libtool-bin \
+        autoconf \
+        automake \
+        libopus-dev \
+        make \
+        g++ \
+        build-essential \
+        libcairo2-dev \
+        libjpeg-dev \
+        libpango1.0-dev \
+        libgif-dev \
+        openssl \
         gnupg \
         ca-certificates \
         jq \
+        libssl-dev \
         procps && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install pnpm
-RUN npm install -g pnpm@9.4.0
-
-# Install runtime dependencies and Google Cloud SDK
+# Install pnpm and Google Cloud SDK
 RUN npm install -g pnpm@9.4.0 && \
     apt-get update && \
     apt-get install -y git python3 curl gnupg && \
@@ -81,7 +92,7 @@ RUN npm install -g pnpm@9.4.0 && \
 
 WORKDIR /app
 
-# Copy only necessary files from builder
+# Copy necessary files from builder
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/.npmrc ./
@@ -89,14 +100,15 @@ COPY --from=builder /app/turbo.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/agent ./agent
 COPY --from=builder /app/client ./client
-COPY --from=builder /app/lerna.json ./
 COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/patches ./patches
 COPY --from=builder /app/scripts ./scripts
 
-# Create characters and knowledge directory
+# Create necessary directories
 RUN mkdir -p characters && \
     mkdir -p characters/knowledge
+
+# Expose necessary ports
+EXPOSE 3000 5173
 
 # CMD that fetches and runs the entrypoint script
 CMD sh -c 'echo "Fetching latest container entrypoint script..." && \
