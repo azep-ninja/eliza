@@ -698,7 +698,7 @@ export class MessageManager {
                 // Check if it's either a text channel or announcement channel
                 // ChannelType.GuildAnnouncement is 5
                 // ChannelType.GuildText is 0
-                if (channel instanceof TextChannel || channel.type === ChannelType.GuildAnnouncement) {
+                if (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement) {
                     const newsChannel = channel as TextChannel;
                     try {
                         newsChannel.createMessageCollector().on('collect', async (message: DiscordMessage) => {
