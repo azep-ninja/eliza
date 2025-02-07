@@ -1,4 +1,8 @@
-const CHAIN_MAPPINGS = {
+type ChainMappings = {
+    [key: string]: string[]
+};
+
+const CHAIN_MAPPINGS: ChainMappings = {
     eth: ['eth', 'ethereum', 'ether', 'mainnet'],
     bsc: ['bsc', 'binance', 'bnb', 'binance smart chain', 'smartchain'],
     polygon: ['polygon', 'matic', 'poly'],
@@ -86,13 +90,17 @@ export interface TokenInfo {
 
 function normalizeChainName(chain: string): string | null {
     const normalizedInput = chain.toLowerCase().trim();
-
+    
+    // First try exact matches
     for (const [standardName, variations] of Object.entries(CHAIN_MAPPINGS)) {
-        if (variations.some((v: string) => normalizedInput.includes(v))) {
+        // Check for exact matches first
+        if (variations.includes(normalizedInput)) {
             return standardName;
         }
     }
 
+    // If no exact match is found, return the original input
+    // This allows for new/unknown chains to pass through
     return normalizedInput;
 }
 
@@ -110,18 +118,20 @@ export function extractTokenInfo(message: string): TokenInfo {
     const prepositionPattern = /(?:on|for|in|at|chain)\s+([a-zA-Z0-9]+)/i;
     const prepositionMatch = cleanMessage.match(prepositionPattern);
 
-    // 2. Look for chain names anywhere in the message
-    for (const [chainName, variations] of Object.entries(CHAIN_MAPPINGS)) {
-        if (variations.some((v: string) => cleanMessage.includes(v))) {
-            result.chain = chainName;
-            break;
-        }
-    }
-
-    // If chain wasn't found in mappings but was found through preposition pattern,
-    // use the exact chain name provided
-    if (!result.chain && prepositionMatch?.[1]) {
+    if (prepositionMatch?.[1]) {
         result.chain = normalizeChainName(prepositionMatch[1]);
+    } else {
+        // 2. Look for exact chain matches in the message
+        for (const [chainName, variations] of Object.entries(CHAIN_MAPPINGS)) {
+            if (variations.some(v => {
+                // Split message into words and check for exact word matches
+                const words = cleanMessage.split(/\s+/);
+                return words.includes(v);
+            })) {
+                result.chain = chainName;
+                break;
+            }
+        }
     }
 
     // Find token address using different patterns
