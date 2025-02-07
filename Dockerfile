@@ -101,8 +101,9 @@ RUN apt-get update && \
 
 # Install pnpm and Google Cloud SDK
 RUN npm install -g pnpm@9.4.0 && \
-    npx playwright install chromium && \
-    npx playwright install-deps chromium && \
+    pnpm add -g playwright && \
+    pnpm exec playwright install chromium && \
+    pnpm exec playwright install-deps chromium && \
     apt-get update && \
     apt-get install -y git python3 curl gnupg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
