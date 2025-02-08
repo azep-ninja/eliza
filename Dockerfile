@@ -23,7 +23,20 @@ RUN npm install -g pnpm@9.4.0 && \
         libpango-1.0-0 \
         libcairo2 \
         libasound2 \
-        libatspi2.0-0 && \
+        libatspi2.0-0 \
+        libwoff2-1 \
+        libgstreamer1.0-0 \
+        libgstreamer-plugins-base1.0-0 \
+        libgstreamer-plugins-bad1.0-0 \
+        libvpx7 \
+        libevent-2.1-7 \
+        libharfbuzz-icu0 \
+        libwebpdemux2 \
+        libenchant-2-2 \
+        libhyphen0 \
+        libmanette-0.2-0 \
+        libflite1 \
+        libx264-164 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -112,7 +125,20 @@ RUN apt-get update && \
         libpango-1.0-0 \
         libcairo2 \
         libasound2 \
-        libatspi2.0-0 && \
+        libatspi2.0-0 \
+        libwoff2-1 \
+        libgstreamer1.0-0 \
+        libgstreamer-plugins-base1.0-0 \
+        libgstreamer-plugins-bad1.0-0 \
+        libvpx7 \
+        libevent-2.1-7 \
+        libharfbuzz-icu0 \
+        libwebpdemux2 \
+        libenchant-2-2 \
+        libhyphen0 \
+        libmanette-0.2-0 \
+        libflite1 \
+        libx264-164 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
