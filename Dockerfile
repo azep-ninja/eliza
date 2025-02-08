@@ -4,7 +4,26 @@ FROM node:23.3.0-slim AS builder
 # Install pnpm globally and install necessary build tools
 RUN npm install -g pnpm@9.4.0 && \
     apt-get update && \
-    apt-get install -y git python3 make g++ curl && \
+    apt-get install -y git python3 make g++ curl \
+        chromium \
+        libglib2.0-0 \
+        libnss3 \
+        libnspr4 \
+        libdbus-1-3 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdrm2 \
+        libxkbcommon0 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxrandr2 \
+        libgbm1 \
+        libpango-1.0-0 \
+        libcairo2 \
+        libasound2 \
+        libatspi2.0-0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -47,10 +66,6 @@ RUN pnpm prune --prod && \
 
 # Final stage
 FROM node:23.3.0-slim
-
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Install runtime dependencies and certificates first
 RUN apt-get update && \
@@ -97,38 +112,12 @@ RUN apt-get update && \
         libpango-1.0-0 \
         libcairo2 \
         libasound2 \
-        libatspi2.0-0 \
-        libgconf-2-4 \
-        libatk1.0-0 \
-        libatk-bridge2.0-0 \
-        libgdk-pixbuf2.0-0 \
-        libgtk-3-0 \
-        libnss3 \
-        libx11-xcb1 \
-        libxcomposite1 \
-        libxcursor1 \
-        libxdamage1 \
-        libxfixes3 \
-        libxi6 \
-        libxrandr2 \
-        libxss1 \
-        libxtst6 \
-        fonts-liberation \
-        libasound2 \
-        libcups2 \
-        libdbus-1-3 \
-        libxshmfence1 && \
+        libatspi2.0-0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Install pnpm and Google Cloud SDK
 RUN npm install -g pnpm@9.4.0 && \
-    export PLAYWRIGHT_BROWSERS_PATH=/usr/bin && \
-    export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && \
-    export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium && \
-    npm install -g playwright && \
-    npx playwright install chromium && \
-    npx playwright install-deps chromium && \
     apt-get update && \
     apt-get install -y git python3 curl gnupg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
