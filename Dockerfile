@@ -48,6 +48,10 @@ RUN pnpm prune --prod && \
 # Final stage
 FROM node:23.3.0-slim
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
 # Install runtime dependencies and certificates first
 RUN apt-get update && \
     apt-get upgrade -y && \
@@ -119,6 +123,9 @@ RUN apt-get update && \
 
 # Install pnpm and Google Cloud SDK
 RUN npm install -g pnpm@9.4.0 && \
+    export PLAYWRIGHT_BROWSERS_PATH=/usr/bin && \
+    export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && \
+    export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium && \
     npm install -g playwright && \
     npx playwright install chromium && \
     npx playwright install-deps chromium && \
