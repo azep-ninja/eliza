@@ -1,6 +1,11 @@
 # Use Node.js 23.3.0 as specified in package.json
 FROM node:23.3.0-slim AS builder
 
+# Playwright environment variables
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
 # Install pnpm globally and install necessary build tools
 RUN npm install -g pnpm@9.4.0 && \
     apt-get update && \
@@ -23,20 +28,7 @@ RUN npm install -g pnpm@9.4.0 && \
         libpango-1.0-0 \
         libcairo2 \
         libasound2 \
-        libatspi2.0-0 \
-        libwoff2-1 \
-        libgstreamer1.0-0 \
-        libgstreamer-plugins-base1.0-0 \
-        libgstreamer-plugins-bad1.0-0 \
-        libvpx7 \
-        libevent-2.1-7 \
-        libharfbuzz-icu0 \
-        libwebpdemux2 \
-        libenchant-2-2 \
-        libhyphen0 \
-        libmanette-0.2-0 \
-        libflite1 \
-        libx264-164 && \
+        libatspi2.0-0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -79,6 +71,11 @@ RUN pnpm prune --prod && \
 
 # Final stage
 FROM node:23.3.0-slim
+
+# Playwright environment variables
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Install runtime dependencies and certificates first
 RUN apt-get update && \
@@ -125,20 +122,7 @@ RUN apt-get update && \
         libpango-1.0-0 \
         libcairo2 \
         libasound2 \
-        libatspi2.0-0 \
-        libwoff2-1 \
-        libgstreamer1.0-0 \
-        libgstreamer-plugins-base1.0-0 \
-        libgstreamer-plugins-bad1.0-0 \
-        libvpx7 \
-        libevent-2.1-7 \
-        libharfbuzz-icu0 \
-        libwebpdemux2 \
-        libenchant-2-2 \
-        libhyphen0 \
-        libmanette-0.2-0 \
-        libflite1 \
-        libx264-164 && \
+        libatspi2.0-0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
