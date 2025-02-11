@@ -93,6 +93,8 @@ RUN apt-get update && \
         libopus-dev \
         make \
         g++ \
+        logrotate \
+        cron \
         build-essential \
         libcairo2-dev \
         libjpeg-dev \
@@ -126,8 +128,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install pnpm and Google Cloud SDK
-RUN npm install -g pnpm@9.4.0 && \
+# Install pnpm, PM2, and Google Cloud SDK
+RUN npm install -g pnpm@9.4.0 pm2@latest && \
     apt-get update && \
     apt-get install -y git python3 curl gnupg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
@@ -136,6 +138,9 @@ RUN npm install -g pnpm@9.4.0 && \
     apt-get install -y google-cloud-sdk && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /app/logs && \
+    chmod 755 /app/logs
 
 WORKDIR /app
 
@@ -153,6 +158,8 @@ COPY --from=builder /app/scripts ./scripts
 # Create necessary directories
 RUN mkdir -p characters && \
     mkdir -p characters/knowledge
+
+RUN service cron start
 
 # Expose necessary ports
 EXPOSE 3000 5173

@@ -93,14 +93,12 @@ function normalizeChainName(chain: string): string | null {
     
     // First try exact matches
     for (const [standardName, variations] of Object.entries(CHAIN_MAPPINGS)) {
-        // Check for exact matches first
         if (variations.includes(normalizedInput)) {
             return standardName;
         }
     }
-
-    // If no exact match is found, return the original input
-    // This allows for new/unknown chains to pass through
+    
+    // Return the normalized input to allow for new/unknown chains
     return normalizedInput;
 }
 
@@ -110,47 +108,50 @@ export function extractTokenInfo(message: string): TokenInfo {
         tokenAddress: null
     };
 
-    // Clean the message
     const cleanMessage = message.toLowerCase().trim();
 
     // Try to find chain name first
-    // 1. Look for chain names after prepositions
     const prepositionPattern = /(?:on|for|in|at|chain)\s+([a-zA-Z0-9]+)/i;
     const prepositionMatch = cleanMessage.match(prepositionPattern);
 
     if (prepositionMatch?.[1]) {
         result.chain = normalizeChainName(prepositionMatch[1]);
     } else {
-        // 2. Look for exact chain matches in the message
+        // Look for exact chain matches in the message
         for (const [chainName, variations] of Object.entries(CHAIN_MAPPINGS)) {
-            if (variations.some(v => {
-                // Split message into words and check for exact word matches
-                const words = cleanMessage.split(/\s+/);
-                return words.includes(v);
-            })) {
+            if (variations.some(v => cleanMessage.split(/\s+/).includes(v))) {
                 result.chain = chainName;
                 break;
             }
         }
     }
 
-    // Find token address using different patterns
+    // Find token address and determine chain from address format
+    let detectedChainType: string | null = null;
+    
     for (const [chainType, pattern] of Object.entries(TOKEN_PATTERNS)) {
         const match = message.match(pattern);
         if (match?.[1]) {
             result.tokenAddress = match[1];
-
-            // If we haven't found a chain yet and it's a Solana address, set chain to Solana
-            if (!result.chain && chainType === 'solana' && match[1].length >= 32) {
-                result.chain = 'solana';
+            
+            // Determine chain type based on address format
+            if (!result.chain) {
+                if (chainType === 'solana' && match[1].length >= 32 && match[1].length <= 44) {
+                    detectedChainType = 'solana';
+                } else if (chainType === 'tron' && match[1].startsWith('T')) {
+                    detectedChainType = 'tron';
+                } else if (chainType === 'sui' && match[1].length === 66) {
+                    detectedChainType = 'sui';
+                } else if (chainType === 'evm') {
+                    detectedChainType = 'eth'; // Default EVM chain
+                }
             }
-            break;
         }
     }
 
-    // If we still don't have a chain but have an EVM address, default to ethereum
-    if (!result.chain && result.tokenAddress?.startsWith('0x')) {
-        result.chain = 'eth';
+    // Set chain based on detected address type if no chain was explicitly specified
+    if (!result.chain && detectedChainType) {
+        result.chain = detectedChainType;
     }
 
     return result;

@@ -11,7 +11,7 @@ import {
     elizaLogger,
     generateMessageResponse
 } from "@elizaos/core";
-import { auditTemplate } from "../templates";
+import { auditTemplate, errorTemplate } from "../templates";
 import { extractTokenInfo } from "../utils/chain-detection";
 
 interface AuditResponse {
@@ -31,6 +31,7 @@ interface DexResponse {
     pairs?: DexPair[];
     otherChains?: string[];
 }
+
 class TokenAuditAction {
     private apiKey: string;
 
@@ -294,11 +295,36 @@ export const auditAction: Action = {
             return true;
         } catch (error) {
             elizaLogger.error("Error in AUDIT_TOKEN handler:", error?.message, error?.error);
-
+        
             if (callback) {
+                // Generate response using the error template
+                const context = composeContext({
+                    state: {
+                        ...state,
+                        error: error.message
+                    },
+                    template: errorTemplate
+                });
+        
+                const responseContent = await generateMessageResponse({
+                    runtime,
+                    context,
+                    modelClass: ModelClass.LARGE
+                });
+        
+                if (!responseContent) {
+                    // Fallback error if template generation fails
+                    await callback({
+                        text: "I encountered an unexpected issue while analyzing this token. Please try again in a moment.",
+                        content: { error: error.message },
+                        inReplyTo: message.id
+                    });
+                    return false;
+                }
+        
                 await callback({
-                    text: "An error occurred while performing the token audit. Please try again later, and ensure the address is correct, and chain is supported.",
-                    content: { error: "Internal server error" },
+                    text: responseContent.text,
+                    content: { error: error.message },
                     inReplyTo: message.id
                 });
             }

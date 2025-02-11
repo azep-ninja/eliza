@@ -310,6 +310,25 @@ export class TwitterPostClient {
         if (this.approvalRequired) this.runPendingTweetCheckLoop();
     }
 
+    private cleanTweetText(text: string): string {
+        // First, handle double backslashes as paragraph breaks
+        let cleaned = text.replace(/\\\\/g, "\n\n");
+        
+        // Then handle regular newline sequences
+        cleaned = cleaned.replace(/\\n/g, "\n\n");
+        
+        // Remove any remaining single backslashes that aren't part of an escape sequence
+        cleaned = cleaned.replace(/\\(?![\"\'\\nrt])/g, "");
+        
+        // Remove any repeated newlines (more than 2)
+        cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+        
+        // Trim any leading/trailing whitespace
+        cleaned = cleaned.trim();
+        
+        return cleaned;
+    }
+
     private runPendingTweetCheckLoop() {
         setInterval(async () => {
             await this.handlePendingTweet();
@@ -528,6 +547,7 @@ export class TwitterPostClient {
                     maxTweetLength,
                 }
             );
+            elizaLogger.info("Tweet State:\n" + state);
 
             const context = composeContext({
                 state,
@@ -536,7 +556,7 @@ export class TwitterPostClient {
                     twitterPostTemplate,
             });
 
-            elizaLogger.log("generate post prompt:\n" + context);
+            elizaLogger.info("generate post prompt:\n" + context);
 
             const response = await generateText({
                 runtime: this.runtime,
@@ -576,7 +596,7 @@ export class TwitterPostClient {
                         );
                     }
                 } catch(error) {
-                    elizaLogger.error("Error srxtracting text:", error);
+                    elizaLogger.error("Error extracting text:", error);
                 }
             }
 
@@ -595,12 +615,8 @@ export class TwitterPostClient {
             const removeQuotes = (str: string) =>
                 str.replace(/^['"](.*)['"]$/, "$1");
 
-            const fixNewLines = (str: string) => str.replaceAll(/\\n/g, "\n\n"); //ensures double spaces
-
             // Final cleaning
-            tweetTextForPosting = removeQuotes(
-                fixNewLines(tweetTextForPosting)
-            );
+            tweetTextForPosting = this.cleanTweetText(removeQuotes(tweetTextForPosting));
 
             if (this.isDryRun) {
                 elizaLogger.info(

@@ -60,3 +60,46 @@ Market Data Results:
 11. **User Friendly:** Format your response as a clear security analysis suitable for users, in an easy-to-understand manner, avoiding overly technical language.
 
 # Instructions: Based on the context above, provide your response, inline with the character {{agentName}}.` + messageCompletionFooter;
+
+export const errorTemplate = `Generate an error response for the character {{agentName}} based on the context:
+
+# Task: Generate a response for the character {{agentName}}. DO NOT PROVIDE ANY FOLLOW UP ACTIONS.
+About {{agentName}}:
+{{bio}}
+{{lore}}
+
+{{recentMessages}}
+
+Error:
+{{error}}
+
+**Analysis Instructions:**
+
+1. **Error Analysis:** Review the error message to understand what went wrong and form a user-friendly explanation.
+
+2. **User Message Analysis:** Review the {{recentMessages}} to understand:
+   * What the user was trying to accomplish
+   * Their level of technical understanding
+   * Whether this is a repeat attempt
+
+3. **Response Elements:**
+   * Must clearly explain what went wrong in user-friendly terms
+   * Should be encouraging and not dismissive
+   * Include suggestions for what to try next
+   * Maintain a helpful tone
+
+4. **Character Focus:** 
+   * Maintain {{agentName}}'s personality throughout the response
+   * Use appropriate tone and language for the character
+   * Keep the response helpful and constructive
+   * Avoid breaking character while explaining technical details
+
+5. **Do Not:**
+   * Blame the user
+   * Use overly technical language
+   * Provide generic error messages
+   * Leave the user without next steps
+   * Expose sensitive system details
+   * Make assumptions about data you don't have
+
+# Instructions: Based on the context above, provide your response, inline with the character {{agentName}}.` + messageCompletionFooter;

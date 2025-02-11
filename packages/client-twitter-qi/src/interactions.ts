@@ -408,6 +408,8 @@ export class TwitterInteractionClient {
             this.client.saveRequestMessage(message, state);
         }
 
+       //console.log(`[DEBUG LOG MESSAGE]:\nTweet:\n${message}`)
+
         // get usernames into str
         const validTargetUsersStr =
             this.client.twitterConfig.TWITTER_TARGET_USERS.join(",");
@@ -420,6 +422,8 @@ export class TwitterInteractionClient {
                 this.runtime.character?.templates?.shouldRespondTemplate ||
                 twitterShouldRespondTemplate(validTargetUsersStr),
         });
+
+        //console.log(`[DEBUG LOG SHOULD RESPOND]:\nAgent's Output:\n${shouldRespondContext}`)
 
         const shouldRespond = await generateShouldRespond({
             runtime: this.runtime,
@@ -466,6 +470,8 @@ export class TwitterInteractionClient {
             modelClass: ModelClass.LARGE,
         });
 
+        //console.log(`[DEBUG LOG RESPONSE]:\nAgent's Output:\n${response}\n${context}`)
+
         const removeQuotes = (str: string) =>
             str.replace(/^['"](.*)['"]$/, "$1");
 
@@ -476,6 +482,7 @@ export class TwitterInteractionClient {
         response.text = removeQuotes(response.text);
 
         if (response.text) {
+            //console.log(`[DEBUG LOG RESPONSE]: Selected Post: ${tweet.id} - ${tweet.username}: ${tweet.text}\nAgent's Output:\n${response.text}`)
             if (this.isDryRun) {
                 elizaLogger.info(
                     `Dry run: Selected Post: ${tweet.id} - ${tweet.username}: ${tweet.text}\nAgent's Output:\n${response.text}`
