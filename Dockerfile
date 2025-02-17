@@ -7,8 +7,6 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
     PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
     PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--headless=new,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus" \
     PLAYWRIGHT_SKIP_BROWSER_VALIDATION=1
-    DISPLAY= \
-    XAUTHORITY=
 
 # Install pnpm globally and install necessary build tools
 RUN npm install -g pnpm@9.4.0 && \
@@ -82,8 +80,6 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
     PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
     PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--headless=new,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus" \
     PLAYWRIGHT_SKIP_BROWSER_VALIDATION=1
-    DISPLAY= \
-    XAUTHORITY=
 
 # Install runtime dependencies and certificates first
 RUN apt-get update && \
@@ -165,7 +161,11 @@ COPY --from=builder /app/scripts ./scripts
 
 # Create necessary directories
 RUN mkdir -p characters && \
-    mkdir -p characters/knowledge
+    mkdir -p characters/knowledge && \
+    mkdir -p content_cache && \
+    mkdir -p debug_audio && \
+    chmod 777 content_cache && \
+    chmod 777 debug_audio
 
 RUN service cron start
 
