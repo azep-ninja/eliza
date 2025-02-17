@@ -5,7 +5,7 @@ FROM node:23.3.0-slim AS builder
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
-    PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--headless=new,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus" \
+    PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--headless=new,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus,--disable-web-security,--allow-running-insecure-content,--disable-features=IsolateOrigins,site-per-process,CrossSiteDocumentBlockingIfIsolating" \
     PLAYWRIGHT_SKIP_BROWSER_VALIDATION=1
 
 # Install pnpm globally and install necessary build tools
@@ -78,7 +78,7 @@ FROM node:23.3.0-slim
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
-    PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--headless=new,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus" \
+    PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--headless=new,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus,--disable-web-security,--allow-running-insecure-content,--disable-features=IsolateOrigins,site-per-process,CrossSiteDocumentBlockingIfIsolating" \
     PLAYWRIGHT_SKIP_BROWSER_VALIDATION=1
 
 # Install runtime dependencies and certificates first
@@ -161,11 +161,11 @@ COPY --from=builder /app/scripts ./scripts
 
 # Create necessary directories
 RUN mkdir -p characters && \
-    mkdir -p characters/knowledge && \
-    mkdir -p content_cache && \
-    mkdir -p debug_audio && \
-    chmod 777 content_cache && \
-    chmod 777 debug_audio
+    mkdir -p characters/knowledge
+
+# Create chromium symbolic link
+RUN mkdir -p /usr/bin/chromium-1140/chrome-linux && \
+    ln -s /usr/bin/chromium /usr/bin/chromium-1140/chrome-linux/chrome
 
 RUN service cron start
 

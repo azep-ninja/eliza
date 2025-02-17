@@ -1066,6 +1066,8 @@ export class MessageManager {
 
         const lastMessage =
             channelState.messages[channelState.messages.length - 1];
+        if (!lastMessage || !lastMessage.content) return true;
+
         // If it's been more than 5 minutes since last message, reduce interest
         const timeSinceLastMessage = Date.now() - channelState.lastMessageSent;
 
