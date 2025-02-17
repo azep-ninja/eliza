@@ -75,7 +75,12 @@ FROM node:23.3.0-slim
 # Playwright environment variables
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
+    PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus" \
+    PLAYWRIGHT_HEADLESS=true \
+    PLAYWRIGHT_SKIP_BROWSER_VALIDATION=1 \
+    DISPLAY= \
+    XAUTHORITY=
 
 # Install runtime dependencies and certificates first
 RUN apt-get update && \
