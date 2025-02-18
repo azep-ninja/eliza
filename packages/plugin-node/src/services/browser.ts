@@ -94,12 +94,29 @@ export class BrowserService extends Service implements IBrowserService {
 
     async initializeBrowser() {
         if (!this.browser) {
+            // this.browser = await chromium.launch({
+            //     headless: true,
+            //     args: [
+            //         "--disable-dev-shm-usage", // Uses /tmp instead of /dev/shm. Prevents memory issues on low-memory systems
+            //         "--block-new-web-contents", // Prevents creation of new windows/tabs
+            //     ],
+            // });
+            const defaultArgs = [
+                "--disable-dev-shm-usage",
+                "--block-new-web-contents",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--headless=new"
+            ];
+    
+            // Get any additional args from environment
+            const envArgs = process.env.PLAYWRIGHT_BROWSER_ARGS ? 
+                process.env.PLAYWRIGHT_BROWSER_ARGS.split(',') : [];
+    
             this.browser = await chromium.launch({
                 headless: true,
-                args: [
-                    "--disable-dev-shm-usage", // Uses /tmp instead of /dev/shm. Prevents memory issues on low-memory systems
-                    "--block-new-web-contents", // Prevents creation of new windows/tabs
-                ],
+                executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+                args: [...defaultArgs, ...envArgs]
             });
 
             const platform = process.platform;

@@ -2,11 +2,7 @@
 FROM node:23.3.0-slim AS builder
 
 # Playwright environment variables
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
-    PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--headless=new,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus,--disable-web-security,--allow-running-insecure-content,--disable-features=IsolateOrigins,site-per-process,CrossSiteDocumentBlockingIfIsolating" \
-    PLAYWRIGHT_SKIP_BROWSER_VALIDATION=1
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Install pnpm globally and install necessary build tools
 RUN npm install -g pnpm@9.4.0 && \
@@ -75,11 +71,7 @@ RUN pnpm prune --prod && \
 FROM node:23.3.0-slim
 
 # Playwright environment variables
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin \
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
-    PLAYWRIGHT_BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--headless=new,--disable-gpu,--disable-software-rasterizer,--disable-dev-shm-usage,--disable-dbus,--disable-web-security,--allow-running-insecure-content,--disable-features=IsolateOrigins,site-per-process,CrossSiteDocumentBlockingIfIsolating" \
-    PLAYWRIGHT_SKIP_BROWSER_VALIDATION=1
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Install runtime dependencies and certificates first
 RUN apt-get update && \
